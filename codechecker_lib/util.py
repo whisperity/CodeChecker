@@ -8,14 +8,18 @@ Util module.
 """
 
 import datetime
+import getpass
 import glob
 import hashlib
 import ntpath
 import os
+import random
 import shutil
 import socket
 import subprocess
+import string
 import sys
+import tempfile
 
 from codechecker_lib.logger import LoggerFactory
 
@@ -190,7 +194,18 @@ def call_command(command, env=None):
 
 def get_default_workspace():
     """
-    Default workspace in the users home directory.
+    Default workspace in the user's home directory.
     """
     workspace = os.path.join(os.path.expanduser("~"), '.codechecker')
+    return workspace
+
+def get_temporary_workspace():
+    """
+    Temporary workspace in the temporary folder for the user.
+    """
+    tempname = ''.join(random.choice(string.ascii_lowercase +
+                                     string.digits)
+                       for _ in range(6))
+    workspace = os.path.join(tempfile.gettempdir(), "ccws_" +
+                             getpass.getuser() + "." + tempname)
     return workspace

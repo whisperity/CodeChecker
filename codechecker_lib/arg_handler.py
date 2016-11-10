@@ -164,6 +164,123 @@ def handle_server(args):
                                          args.not_host_only,
                                          context.db_version_info)
 
+def handle_daemon(args):
+    """
+    Starts the CodeChecker-as-a-Service daemon.
+    This will listen to remote build databases and check commands.
+    """
+    if not host_check.check_zlib():
+        LOG.error("zlib error")
+        sys.exit(1)
+
+    try:
+        workspace = args.workspace
+    except AttributeError:
+        # If no workspace value was set for some reason
+        # in args set the default value.
+        workspace = util.get_default_workspace()
+
+    # WARNING
+    # In case of SQLite args.dbaddress default value is used
+    # for which the is_localhost should return true.
+
+    local_db = util.is_localhost(args.dbaddress)
+    if local_db and not os.path.exists(workspace):
+        os.makedirs(workspace)
+
+    context = generic_package_context.get_context()
+    context.codechecker_workspace = workspace
+    session_manager.SessionManager.CodeChecker_Workspace = workspace
+    context.db_username = args.dbusername
+
+    check_env = analyzer_env.get_check_env(context.path_env_extra,
+                                           context.ld_lib_path_extra)
+
+    sql_server = SQLServer.from_cmdline_args(args,
+                                             context.codechecker_workspace,
+                                             context.migration_root,
+                                             check_env)
+
+    LOG.debug('Starting database for CodeChecker daemon.')
+    sql_server.start(context.db_version_info, wait_for_start=True,
+                     init=True)
+
+    # Start database viewer.
+    db_connection_string = sql_server.get_connection_string()
+
+    # TODO: [Q] Needed?
+    suppress_handler = generic_package_suppress_handler.GenericSuppressHandler()
+
+    LOG.info("--- READY TO SETUP DAEMON BACKEND ON THRIFT... ---")
+
+
+    #client_db_access_server.start_server(package_data,
+    #                                     args.view_port,
+    #                                     db_connection_string,
+    #                                     suppress_handler,
+    #                                     args.not_host_only,
+    #                                     context.db_version_info)
+
+def handle_remote(args):
+    """
+    Runs the original build and logs the buildactions.
+    Then uploads information to a remote CCaaS daemon and issues it to check.
+    """
+    try:
+
+        if not host_check.check_zlib():
+            LOG.error("zlib error")
+            sys.exit(1)
+
+        workspace = os.path.realpath(util.get_temporary_workspace())
+        if not os.path.isdir(workspace):
+            os.mkdir(workspace)
+
+        LOG.debug("Using temporary workspace: " + workspace)
+
+        context = generic_package_context.get_context()
+        args.workspace = workspace
+        context.codechecker_workspace = workspace
+
+        log_file = build_manager.check_log_file(args)
+
+        if not log_file:
+            log_file = build_manager.generate_log_file(args,
+                                                       context,
+                                                       args.quiet_build)
+        if not log_file:
+            LOG.error("Failed to generate compilation command file: " +
+                      log_file)
+            sys.exit(1)
+
+        try:
+            actions = log_parser.parse_log(log_file)
+        except Exception as ex:
+            LOG.error(ex)
+            sys.exit(1)
+
+        if not actions:
+            LOG.warning('There are no build actions in the log file.')
+            sys.exit(1)
+
+        LOG.debug("Logfile generation was successful in " +
+                  os.path.join(workspace, "compilation_commands.json"))
+        with open(os.path.join(workspace, "compilation_commands.json"), 'r') as f:
+            LOG.debug("FILE CONTENTS\n" + '\n'.join(f.readlines()))
+
+        LOG.info("--- READY TO UPLOAD INFORMATION TO SERVER ---")
+
+
+        # ----
+        # Remove the temporary workspace.
+        # TODO: Uncomment this when we know that the stuff works.
+        #shutil.rmtree(workspace)
+
+    except Exception as ex:
+        LOG.error(ex)
+        import traceback
+        print(traceback.format_exc())
+
 
 def handle_log(args):
     """
