@@ -16,8 +16,8 @@ import sys
 
 import shared
 import sqlalchemy
-from codechecker_gen.DBThriftAPI import CheckerReport
-from codechecker_gen.DBThriftAPI.ttypes import *
+from codechecker_gen.daemonServer import RemoteChecking
+from codechecker_gen.daemonServer.ttypes import *
 from thrift.protocol import TBinaryProtocol
 from thrift.server import TServer
 from thrift.transport import TSocket
@@ -31,9 +31,33 @@ from db_model.orm_model import *
 from codechecker_lib.profiler import timeit
 from codechecker_lib.profiler import profileit
 
-from storage_server import report_server
-
 LOG = logger.get_new_logger('CC DAEMON')
+
+
+class RemoteHandler(object):
+    """
+    Class to handle requests from the CodeChecker script to
+    perform checking on this remote, daemon machine.
+    """
+
+    @decorators.catch_sqlalchemy
+    @timeit
+    def Hello(self, a):
+        """
+
+        """
+        print("Hello", a)
+
+    @decorators.catch_sqlalchemy
+    @timeit
+    def stopServer(self):
+        """
+        """
+        self.session.commit()
+
+    def __init__(self, session, lockDB):
+        self.session = session
+
 
 def run_server(port, db_uri, db_version_info, callback_event=None):
     LOG.debug('Starting CodeChecker daemon ...')
@@ -53,9 +77,9 @@ def run_server(port, db_uri, db_version_info, callback_event=None):
     LOG.debug('Starting thrift server.')
     try:
         # Start thrift server.
-        handler = report_server.CheckerReportHandler(session, True)
+        handler = RemoteHandler(session, True)
 
-        processor = CheckerReport.Processor(handler)
+        processor = RemoteChecking.Processor(handler)
         transport = TSocket.TServerSocket(port=port)
         tfactory = TTransport.TBufferedTransportFactory()
         pfactory = TBinaryProtocol.TBinaryProtocolFactory()
@@ -65,18 +89,18 @@ def run_server(port, db_uri, db_version_info, callback_event=None):
                                            tfactory,
                                            pfactory,
                                            daemon=True)
+        server.setNumThreads(1) # TODO: Dev config --- plase remove
 
-        LOG.info('Waiting for check results on [' + str(port) + ']')
+        LOG.info('Waiting for remote connections on [' + str(port) + ']')
         if callback_event:
             callback_event.set()
         LOG.debug('Starting to serve.')
         server.serve()
-        LOG.debug('Stopped serving.')
         session.commit()
     except socket.error as sockerr:
         LOG.error(str(sockerr))
         if sockerr.errno == errno.EADDRINUSE:
-            LOG.error('Checker port ' + str(port) + ' is already used!')
+            LOG.error('Port ' + str(port) + ' is already used!')
         sys.exit(1)
     except Exception as err:
         LOG.error(str(err))

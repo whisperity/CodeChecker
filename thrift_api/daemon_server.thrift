@@ -12,5 +12,9 @@ namespace py daemonServer
 // The order of the functions indicates the order that must be maintained when
 // calling into the server.
 service RemoteChecking {
-                
+                void Hello(1: i64 a)
+                    throws (1: shared.RequestFailed requestError),
+
+                bool stopServer()
+                                throws (1: shared.RequestFailed requestError)
 }
