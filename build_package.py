@@ -92,29 +92,42 @@ def build_ld_logger(ld_logger_path, env, arch=None, clean=True, silent=True):
 
 
 # -------------------------------------------------------------------
+def __thrift_maker(thrift_file, generators, config = None):
+    """ Generate files from the Thrift IDL. """
+
+    cmd = ['thrift', '-r', '-I', '.']
+    for generator in generators:
+        cmd += ['--gen', generator]
+    cmd += [thrift_file]
+
+    return run_cmd(cmd, config['thrift_files_dir'],
+                   config['env'], config['silent'])
+
 def generate_thrift_files(thrift_files_dir, env, silent=True):
     """ Generate python and javascript files from thrift IDL. """
 
     LOG.info('Generating thrift files ...')
-    rss_thrift = 'report_storage_server.thrift'
-    rss_cmd = ['thrift', '-r', '-I', '.', '--gen', 'py', rss_thrift]
-    ret = run_cmd(rss_cmd, thrift_files_dir, env, silent=silent)
+    config = {'thrift_files_dir': thrift_files_dir,
+              'env': env,
+              'silent': silent}
+
+    ret = __thrift_maker('report_storage_server.thrift', ['py'], config)
     if ret:
         LOG.error('Failed to generate storage server files')
         return ret
 
-    rvs_thrift = 'report_viewer_server.thrift'
-    rvs_cmd = ['thrift', '-r', '-I', '.',
-               '--gen', 'py', '--gen', 'js:jquery', rvs_thrift]
-    ret = run_cmd(rvs_cmd, thrift_files_dir, env, silent=silent)
+    ret = __thrift_maker('report_viewer_server.thrift',
+                         ['py', 'js:jquery'], config)
     if ret:
         LOG.error('Failed to generate viewer server files')
         return ret
 
-    auth_thrift = 'authentication.thrift'
-    auth_cmd = ['thrift', '-r', '-I', '.',
-                '--gen', 'py', auth_thrift]
-    ret = run_cmd(auth_cmd, thrift_files_dir, env, silent=silent)
+    ret = __thrift_maker('daemon_server.thrift', ['py'], config)
+    if ret:
+        LOG.error('Failed to generate daemon server files')
+        return ret
+
+    ret = __thrift_maker('authentication.thrift', ['py'], config)
     if ret:
         LOG.error('Failed to generate authentication interface files')
         return ret

@@ -20,7 +20,7 @@ struct SuppressBugData {
 }
 typedef list<SuppressBugData> SuppressBugList
 
-// The order of the functions inditaces the order that must be maintained when
+// The order of the functions indicates the order that must be maintained when
 // calling into the server.
 service CheckerReport {
                 // store checker run related data to the database
