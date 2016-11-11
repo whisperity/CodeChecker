@@ -30,7 +30,7 @@ from codechecker_lib import util
 from codechecker_lib.logger import LoggerFactory
 from codechecker_lib.analyzers import analyzer_types
 from codechecker_lib.database_handler import SQLServer
-from daemon_server import daemon_server
+from daemon import server
 from viewer_server import client_db_access_server
 
 LOG = LoggerFactory.get_new_logger('ARG_HANDLER')
@@ -212,15 +212,14 @@ def handle_daemon(args):
     db_connection_string = sql_server.get_connection_string()
 
     is_server_started = multiprocessing.Event()
-    server = multiprocessing.Process(target=daemon_server.run_server,
-                                     args=(
-                                         args.port,
-                                         db_connection_string,
-                                         context.db_version_info,
-                                         is_server_started))
+    dserver = multiprocessing.Process(target=server.run_server,
+                                      args=(
+                                          args.port,
+                                          db_connection_string,
+                                          is_server_started))
 
-    server.daemon = True
-    server.start()
+    dserver.daemon = True
+    dserver.start()
 
     # Wait a bit.
     counter = 0
@@ -229,9 +228,9 @@ def handle_daemon(args):
         time.sleep(3)
         counter += 1
 
-    if counter >= 4 or not server.is_alive():
+    if counter >= 4 or not dserver.is_alive():
         # Last chance to start.
-        if server.exitcode is None:
+        if dserver.exitcode is None:
             # It is possible that the database starts really slow.
             time.sleep(5)
             if not is_server_started.is_set():
@@ -240,14 +239,14 @@ def handle_daemon(args):
         else:
             LOG.error('Failed to start checker server.')
             LOG.error('Checker server exit code: ' +
-                      str(server.exitcode))
+                      str(dserver.exitcode))
             sys.exit(1)
 
-    atexit.register(server.terminate)
+    atexit.register(dserver.terminate)
     LOG.debug('Daemon start sequence done.')
 
     # The main thread will wait FOREVER for the server to shut down
-    server.join()
+    dserver.join()
     LOG.debug("Daemon server quit.")
 
 

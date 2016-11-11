@@ -199,13 +199,12 @@ def get_default_workspace():
     workspace = os.path.join(os.path.expanduser("~"), '.codechecker')
     return workspace
 
+
 def get_temporary_workspace():
     """
     Temporary workspace in the temporary folder for the user.
     """
-    tempname = ''.join(random.choice(string.ascii_lowercase +
-                                     string.digits)
-                       for _ in range(6))
     workspace = os.path.join(tempfile.gettempdir(), "ccws_" +
-                             getpass.getuser() + "." + tempname)
+                             getpass.getuser() + "." +
+                             get_tmp_dir_hash()[0:6])
     return workspace

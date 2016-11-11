@@ -59,7 +59,7 @@ class RemoteHandler(object):
         self.session = session
 
 
-def run_server(port, db_uri, db_version_info, callback_event=None):
+def run_server(port, db_uri, callback_event=None):
     LOG.debug('Starting CodeChecker daemon ...')
 
     try:
@@ -89,7 +89,7 @@ def run_server(port, db_uri, db_version_info, callback_event=None):
                                            tfactory,
                                            pfactory,
                                            daemon=True)
-        server.setNumThreads(1) # TODO: Dev config --- plase remove
+        server.setNumThreads(1)  # TODO: Dev config --- plase remove
 
         LOG.info('Waiting for remote connections on [' + str(port) + ']')
         if callback_event:

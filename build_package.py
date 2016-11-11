@@ -103,6 +103,7 @@ def __thrift_maker(thrift_file, generators, config = None):
     return run_cmd(cmd, config['thrift_files_dir'],
                    config['env'], config['silent'])
 
+
 def generate_thrift_files(thrift_files_dir, env, silent=True):
     """ Generate python and javascript files from thrift IDL. """
 
@@ -619,9 +620,9 @@ def build_package(repository_root, build_package_config, env=None):
 
     # CodeChecker daemon server.
     LOG.debug('Copy codechecker daemon server')
-    source = os.path.join(repository_root, 'daemon_server')
+    source = os.path.join(repository_root, 'daemon')
     target = os.path.join(package_root,
-                          package_layout['daemon_server_modules'])
+                          package_layout['daemon_modules'])
     copy_tree(source, target)
 
     # CodeChecker viewer server.
