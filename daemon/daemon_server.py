@@ -89,7 +89,7 @@ def run_server(port, db_uri, callback_event=None):
                                            tfactory,
                                            pfactory,
                                            daemon=True)
-        server.setNumThreads(1)  # TODO: Dev config --- plase remove
+        server.setNumThreads(1)  # TODO: Dev config --- please remove
 
         LOG.info('Waiting for remote connections on [' + str(port) + ']')
         if callback_event:
