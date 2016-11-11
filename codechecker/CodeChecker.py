@@ -329,11 +329,13 @@ Build command which is used to build the project.''')
                                  required=False,
                                  help=log_argument_help_msg)
 
-        remote_parser.add_argument('-u', '--suppress', type=str,
-                                  dest="suppress",
-                                  default=argparse.SUPPRESS,
-                                  required=False,
-                                  help=suppress_help_msg)
+        remote_parser.add_argument('--host', type=str, dest="host",
+                                  default='localhost',
+                                  help='Remote server\'s host to connect to.')
+
+        remote_parser.add_argument('-p', '--port', type=str, dest="port",
+                                  default=11444,
+                                  required=True, help='Remote port to use.')
 
         remote_parser.add_argument('--force', action="store_true",
                                   dest="force", default=False, required=False,

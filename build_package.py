@@ -604,6 +604,13 @@ def build_package(repository_root, build_package_config, env=None):
                           package_layout['storage_server_modules'])
     copy_tree(source, target)
 
+    # CodeChecker daemon server.
+    LOG.debug('Copy codechecker daemon server')
+    source = os.path.join(repository_root, 'daemon_server')
+    target = os.path.join(package_root,
+                          package_layout['daemon_server_modules'])
+    copy_tree(source, target)
+
     # CodeChecker viewer server.
     LOG.debug('Copy codechecker viewer server')
     source = os.path.join(repository_root, 'viewer_server')
