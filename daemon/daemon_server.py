@@ -48,6 +48,8 @@ class RemoteHandler(object):
         """
         print("Hello", a)
 
+        return a == 25
+
     @decorators.catch_sqlalchemy
     @timeit
     def stopServer(self):

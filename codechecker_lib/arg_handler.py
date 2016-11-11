@@ -262,6 +262,12 @@ def handle_remote(args):
             LOG.error("zlib error")
             sys.exit(1)
 
+        # Start a client and check the connection towards the server before
+        # doing anything.
+        rclient = daemon_client.RemoteClient(args.host, args.port)
+        rclient.handshake()
+
+
         workspace = os.path.realpath(util.get_temporary_workspace())
         if not os.path.isdir(workspace):
             os.mkdir(workspace)
@@ -302,7 +308,7 @@ def handle_remote(args):
                 os.path.join(workspace, "compilation_commands.json"),
                 'r') as f:
             LOG.debug("FILE CONTENTS\n" + '\n'.join(f.readlines()))
-            rclient = daemon_client.RemoteClient(f)
+
 
         # ----
         # Remove the temporary workspace.
