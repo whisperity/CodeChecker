@@ -4,6 +4,23 @@
 #   License. See LICENSE.TXT for details.
 # -------------------------------------------------------------------------
 
+import os
+import socket
+import sys
+
+from thrift import Thrift
+from thrift.server import TServer
+from thrift.transport import TSocket, TTransport, THttpClient
+from thrift.Thrift import TException, TApplicationException
+from thrift.protocol import TBinaryProtocol, TJSONProtocol
+from thrift.protocol.TProtocol import TProtocolException
+
+from codechecker_lib import session_manager
+
+from codechecker_gen.daemonServer import RemoteChecking
+from codechecker_gen.daemonServer.ttypes import *
+import shared
+
 class RemoteClient(object):
 
     def __init__(self, host, port):
@@ -21,7 +38,6 @@ class RemoteClient(object):
         self.protocol = TBinaryProtocol.TBinaryProtocol(self.transport)
         self.client = RemoteChecking.Client(self.protocol)
 
-    @timeit
     def handshake(self):
         self.transport.open()
         result = self.client.Hello(20)

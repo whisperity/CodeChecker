@@ -299,63 +299,26 @@ Build command which is used to build the project.''')
                                        'and pass them to Clang. This is'
                                        'useful when you do cross-compilation.')
 
+        check_parser.add_argument('--remote-host', '--host', '-r',
+                                  dest="remote_host",
+                                  default=None,
+                                  required=False,
+                                  help='Use a remote daemon available at this'
+                                  ' host to check the project instead of the '
+                                  'local computer')
+
+        check_parser.add_argument('--remote-port', '-p',
+                                  dest="remote_port",
+                                  default=0,
+                                  required=False,
+                                  help='Use a remote daemon available on this'
+                                  ' port to check the project, instead of a '
+                                  'local instance.')
+
         add_analyzer_arguments(check_parser)
         add_database_arguments(check_parser)
         add_verbose_arguments(check_parser)
         check_parser.set_defaults(func=arg_handler.handle_check)
-
-        # --------------------------------------
-        # Remote check commands.
-        remote_parser = subparsers.add_parser('remote',
-                                              formatter_class=ADHF,
-                                              help=''' \
-Builds the project on the local machine and uploads information to a remote \
-host for running the checks.''')
-
-        remote_parser.add_argument('-n', '--name', type=str,
-                                   dest="name", required=True,
-                                   default=argparse.SUPPRESS,
-                                   help=name_help_msg)
-
-        remotegroup = remote_parser.add_mutually_exclusive_group(required=True)
-
-        remotegroup.add_argument('-b', '--build', type=str, dest="command",
-                                 default=argparse.SUPPRESS,
-                                 required=False, help='''\
-Build command which is used to build the project.''')
-
-        remotegroup.add_argument('-l', '--log', type=str, dest="logfile",
-                                 default=argparse.SUPPRESS,
-                                 required=False,
-                                 help=log_argument_help_msg)
-
-        remote_parser.add_argument('--host', type=str, dest="host",
-                                  default='localhost',
-                                  help='Remote server\'s host to connect to.')
-
-        remote_parser.add_argument('-p', '--port', type=str, dest="port",
-                                  default=11444,
-                                  required=True, help='Remote port to use.')
-
-        remote_parser.add_argument('--force', action="store_true",
-                                  dest="force", default=False, required=False,
-                                  help="Delete analysis results form the "
-                                       "database if a run with the "
-                                       "given name already exists.")
-
-        remote_parser.add_argument('-s', '--skip', type=str, dest="skipfile",
-                                  default=argparse.SUPPRESS,
-                                  required=False, help='Path to skip file.')
-
-        remote_parser.add_argument('--quiet-build',
-                                  action='store_true',
-                                  default=False,
-                                  required=False,
-                                  help='Do not print out the output of the '
-                                       'original build.')
-
-        add_analyzer_arguments(remote_parser)
-        remote_parser.set_defaults(func=arg_handler.handle_remote)
 
         # --------------------------------------
         # QuickCheck commands.
@@ -512,6 +475,7 @@ Build command which is used to build the project.''')
                                    required=False, help='Server address.')
 
         add_database_arguments(daemon_parser)
+        add_verbose_arguments(daemon_parser)
         daemon_parser.set_defaults(func=arg_handler.handle_daemon)
 
         # --------------------------------------

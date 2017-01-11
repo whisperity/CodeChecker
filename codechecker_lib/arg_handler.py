@@ -171,7 +171,8 @@ def handle_server(args):
 def handle_daemon(args):
     """
     Starts the CodeChecker-as-a-Service daemon.
-    This will listen to remote build databases and check commands.
+    This mode opens a server and listens to remote connections to support
+    checking a project not on the developer computer but on a team server.
     """
     if not host_check.check_zlib():
         LOG.error("zlib error")
@@ -251,76 +252,6 @@ def handle_daemon(args):
     LOG.debug("Daemon server quit.")
 
 
-def handle_remote(args):
-    """
-    Runs the original build and logs the buildactions.
-    Then uploads information to a remote CCaaS daemon and issues it to check.
-    """
-    try:
-
-        if not host_check.check_zlib():
-            LOG.error("zlib error")
-            sys.exit(1)
-
-        # Start a client and check the connection towards the server before
-        # doing anything.
-        rclient = daemon_client.RemoteClient(args.host, args.port)
-        rclient.handshake()
-
-
-        workspace = os.path.realpath(util.get_temporary_workspace())
-        if not os.path.isdir(workspace):
-            os.mkdir(workspace)
-
-        LOG.debug("Using temporary workspace: " + workspace)
-
-        context = generic_package_context.get_context()
-        args.workspace = workspace
-        context.codechecker_workspace = workspace
-
-        log_file = build_manager.check_log_file(args)
-
-        if not log_file:
-            log_file = build_manager.generate_log_file(args,
-                                                       context,
-                                                       args.quiet_build)
-        if not log_file:
-            LOG.error("Failed to generate compilation command file: " +
-                      log_file)
-            sys.exit(1)
-
-        try:
-            actions = log_parser.parse_log(log_file)
-        except Exception as ex:
-            LOG.error(ex)
-            sys.exit(1)
-
-        if not actions:
-            LOG.warning('There are no build actions in the log file.')
-            sys.exit(1)
-
-        LOG.debug("Logfile generation was successful in " +
-                  os.path.join(workspace, "compilation_commands.json"))
-
-        LOG.info("--- READY TO UPLOAD INFORMATION TO SERVER ---")
-
-        with open(
-                os.path.join(workspace, "compilation_commands.json"),
-                'r') as f:
-            LOG.debug("FILE CONTENTS\n" + '\n'.join(f.readlines()))
-
-
-        # ----
-        # Remove the temporary workspace.
-        # TODO: Uncomment this when we know that the stuff works.
-        #shutil.rmtree(workspace)
-
-    except Exception as ex:
-        LOG.error(ex)
-        import traceback
-        print(traceback.format_exc())
-
-
 def handle_log(args):
     """
     Generates a build log by running the original build command.
@@ -364,11 +295,28 @@ def handle_check(args):
     Runs the original build and logs the buildactions.
     Based on the log runs the analysis.
     """
+
+    remote = args.remote_host or args.remote_port
+    if remote:
+        LOG.info(''.join(['Using remote check at [',
+                          args.remote_host or '',
+                          ':', args.remote_port, ']']))
+
     try:
         if not host_check.check_zlib():
             sys.exit(1)
 
         args.workspace = os.path.abspath(args.workspace)
+
+        # In remote mode, connect to the remote daemon
+        # and use a temporary workspace
+        if remote:
+            rclient = daemon_client.RemoteClient(args.remote_host,
+                                                 args.remote_port)
+            rclient.handshake()
+
+            args.workspace = os.path.realpath(util.get_temporary_workspace())
+
         if not os.path.isdir(args.workspace):
             os.mkdir(args.workspace)
 
@@ -386,29 +334,42 @@ def handle_check(args):
         actions = log_parser.parse_log(log_file,
                                        args.add_compiler_defaults)
 
-        check_env = analyzer_env.get_check_env(context.path_env_extra,
-                                               context.ld_lib_path_extra)
+        if not remote:
+            # ---- Local check mode ----
 
-        sql_server = SQLServer.from_cmdline_args(args,
-                                                 context.codechecker_workspace,
-                                                 context.migration_root,
-                                                 check_env)
+            check_env = analyzer_env.get_check_env(context.path_env_extra,
+                                                   context.ld_lib_path_extra)
 
-        conn_mgr = client.ConnectionManager(sql_server, 'localhost',
-                                            util.get_free_port())
+            sql_server = SQLServer.from_cmdline_args(args,
+                                                     context.\
+                                                     codechecker_workspace,
+                                                     context.migration_root,
+                                                     check_env)
 
-        sql_server.start(context.db_version_info, wait_for_start=True,
-                         init=True)
+            conn_mgr = client.ConnectionManager(sql_server, 'localhost',
+                                                util.get_free_port())
 
-        conn_mgr.start_report_server()
+            sql_server.start(context.db_version_info, wait_for_start=True,
+                             init=True)
 
-        LOG.debug("Checker server started.")
+            conn_mgr.start_report_server()
 
-        analyzer.run_check(args, actions, context)
+            LOG.debug("Checker server started.")
 
-        LOG.info("Analysis has finished.")
+            analyzer.run_check(args, actions, context)
 
-        log_startserver_hint(args)
+            LOG.info("Analysis has finished.")
+
+            log_startserver_hint(args)
+        else:
+            # ---- Remote check mode ----
+
+            LOG.debug("Logfile generation was successful in " + log_file)
+
+            LOG.info("--- READY TO UPLOAD INFORMATION TO SERVER ---")
+
+            with open(log_file, 'r') as f:
+                LOG.info("FILE CONTENTS\n" + '\n'.join(f.readlines()))
 
     except Exception as ex:
         LOG.error(ex)
@@ -419,6 +380,9 @@ def handle_check(args):
             if log_file:
                 LOG.debug('Removing temporary log file: ' + log_file)
                 os.remove(log_file)
+
+            if remote:
+                shutil.rmtree(args.workspace)
 
 
 def _do_quickcheck(args):

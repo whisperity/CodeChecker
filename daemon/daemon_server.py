@@ -26,12 +26,12 @@ from thrift.transport import TTransport
 from codechecker_lib import database_handler
 from codechecker_lib import decorators
 from codechecker_lib import logger
+from codechecker_lib.logger import LoggerFactory
 from db_model.orm_model import *
 
-from codechecker_lib.profiler import timeit
 from codechecker_lib.profiler import profileit
 
-LOG = logger.get_new_logger('CC DAEMON')
+LOG = LoggerFactory.get_new_logger('CC DAEMON')
 
 
 class RemoteHandler(object):
@@ -41,7 +41,6 @@ class RemoteHandler(object):
     """
 
     @decorators.catch_sqlalchemy
-    @timeit
     def Hello(self, a):
         """
 
@@ -51,7 +50,6 @@ class RemoteHandler(object):
         return a == 25
 
     @decorators.catch_sqlalchemy
-    @timeit
     def stopServer(self):
         """
         """
