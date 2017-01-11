@@ -4,9 +4,11 @@
 #   License. See LICENSE.TXT for details.
 # -------------------------------------------------------------------------
 
+import hashlib
 import os
 import socket
 import sys
+import subprocess
 
 from thrift import Thrift
 from thrift.server import TServer
@@ -15,6 +17,7 @@ from thrift.Thrift import TException, TApplicationException
 from thrift.protocol import TBinaryProtocol, TJSONProtocol
 from thrift.protocol.TProtocol import TProtocolException
 
+from codechecker_lib import build_action
 from codechecker_lib import session_manager
 
 from codechecker_gen.daemonServer import RemoteChecking
@@ -82,3 +85,76 @@ class RemoteClient(object):
     @ThriftClientCall
     def initConnection(self, run_name):
         pass
+
+    # ------------------------------------------------------------
+    @ThriftClientCall
+    def sendFileData(self, files):
+        pass
+
+    # ============================================================
+    def createInitialFileData(self, log_file, actions):
+        """
+        Transforms the given BuildAction list to generate a list
+        of FileData that needs to be sent to the remote server.
+        """
+
+        # -----------------------------------
+        # The log_file must ALWAYS be sent
+        with open(log_file, 'r') as f:
+            logStr = f.read()
+            logSha = hashlib.sha1(logStr).hexdigest()
+
+        logFD = FileData(log_file, logSha, logStr)
+
+        # -----------------------------------
+        # We need to send ALL source files (if they are in the build.json,
+        # the source files have been modified)
+
+        sourceFiles = set()
+        headerFiles = set()
+        for action in actions:
+            sourceFiles = sourceFiles.union(action.sources)
+
+            dependencyCommand = action.original_command.split(' ')
+            dependencyCommand[0] = dependencyCommand[0] \
+                                   + ' -M -MQ"__dummy"'
+            dependencyCommand = ' '.join(dependencyCommand)
+
+            p = subprocess.Popen(dependencyCommand,
+                                 stdin=subprocess.PIPE,
+                                 stdout=subprocess.PIPE,
+                                 stderr=subprocess.PIPE,
+                                 shell=True)
+            output, err = p.communicate()
+            rc = p.returncode
+
+            if rc == 0:
+                # Parse 'Makefile' syntax dependency file
+                dependencies = output.replace('__dummy: ', '')\
+                    .replace(' \\', '')\
+                    .replace('  ', '')\
+                    .replace(' ', '\n')
+
+                headerFiles = headerFiles.union(dependencies.split('\n'))
+
+        sourceFDs = []
+        for f in sourceFiles:
+            with open(f, 'r') as sf:
+                sourceStr = sf.read()
+                sourceSha = hashlib.sha1(sourceStr).hexdigest()
+                sourceFDs.append(FileData(f, sourceSha, sourceStr))
+
+        # -----------------------------------
+        # We also need to send the metadata (path, sha) for every included
+        # header file. Headers don't get their content sent.
+        headerFDs = []
+        for f in headerFiles.difference(sourceFiles):
+            if f == '':
+                continue
+
+            # (Ensure no source file dependency is marked as a header!)
+            with open(f, 'r') as df:
+                headSha = hashlib.sha1(df.read()).hexdigest()
+                headerFDs.append(FileData(f, headSha, None))
+
+        return [logFD] + sourceFDs + headerFDs

@@ -47,6 +47,20 @@ class RemoteHandler(object):
 
         print("Run-name", run_name)
 
+        return True
+
+    def sendFileData(self, files):
+        """
+        Receives a list of files and metadata from
+        the client for a given connection.
+        """
+
+        for fd in files:
+            print( ('Content? {0}, SHA: {1}, Path: {2}'). \
+                format((fd.content is not None), fd.sha, fd.path))
+
+        return len(files)
+
     @decorators.catch_sqlalchemy
     def stopServer(self):
         """

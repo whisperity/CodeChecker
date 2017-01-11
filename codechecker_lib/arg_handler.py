@@ -312,11 +312,11 @@ def handle_check(args):
         # In remote mode, connect to the remote daemon
         # and use a temporary workspace
         if remote:
+            args.workspace = os.path.realpath(util.get_temporary_workspace())
+
             rclient = daemon_client.RemoteClient(args.remote_host,
                                                  args.remote_port)
             rclient.initConnection(args.name)
-
-            args.workspace = os.path.realpath(util.get_temporary_workspace())
 
         if not os.path.isdir(args.workspace):
             os.mkdir(args.workspace)
@@ -368,9 +368,17 @@ def handle_check(args):
             LOG.debug("Logfile generation was successful in " + log_file)
 
             LOG.info("--- READY TO UPLOAD INFORMATION TO SERVER ---")
+            print context.analyzer_binaries
 
-            with open(log_file, 'r') as f:
-                LOG.info("FILE CONTENTS\n" + '\n'.join(f.readlines()))
+            # Send the build.json, the source codes and the dependency
+            # metadata to the server.
+            initialFiles = rclient.createInitialFileData(log_file, actions)
+            #for fd in initialFiles:
+            #    print( ('Content? {0}, SHA: {1}, Path: {2}'). \
+            #        format((fd.content is not None), fd.sha, fd.path))
+            #print initialFiles
+
+            rclient.sendFileData(initialFiles)
 
     except Exception as ex:
         LOG.error(ex)
@@ -383,7 +391,8 @@ def handle_check(args):
                 os.remove(log_file)
 
             if remote:
-                shutil.rmtree(args.workspace)
+                pass
+                #shutil.rmtree(args.workspace)
 
 
 def _do_quickcheck(args):

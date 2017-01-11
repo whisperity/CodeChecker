@@ -28,6 +28,7 @@ service RemoteChecking {
                         1: string run_name)
                         throws (1: shared.RequestFailed requestError)
 
+    // sends a list of files to the server to notify the server about the state of files on the client machine
     i64 sendFileData(
                      1: FileList files)
                      throws (1: shared.RequestFailed requestError)
@@ -35,8 +36,8 @@ service RemoteChecking {
     PathList getNeededFiles()
                             throws (1: shared.RequestFailed requestError)
 
-    bool doneCheck()
-                   throws (1: shared.RequestFailed requestError)
+    //bool doneCheck()
+                   //throws (1: shared.RequestFailed requestError)
 
     bool stopServer()
                     throws (1: shared.RequestFailed requestError)
