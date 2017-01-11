@@ -40,14 +40,12 @@ class RemoteHandler(object):
     perform checking on this remote, daemon machine.
     """
 
-    @decorators.catch_sqlalchemy
-    def Hello(self, a):
+    def initConnection(self, run_name):
         """
 
         """
-        print("Hello", a)
 
-        return a == 25
+        print("Run-name", run_name)
 
     @decorators.catch_sqlalchemy
     def stopServer(self):
@@ -55,29 +53,30 @@ class RemoteHandler(object):
         """
         self.session.commit()
 
-    def __init__(self, session, lockDB):
-        self.session = session
+    def __init__(self):#, session, lockDB):
+        pass
+        #self.session = session
 
 
 def run_server(port, db_uri, callback_event=None):
     LOG.debug('Starting CodeChecker daemon ...')
 
-    try:
-        engine = database_handler.SQLServer.create_engine(db_uri)
+    #try:
+    #    engine = database_handler.SQLServer.create_engine(db_uri)
+    #
+    #    LOG.debug('Creating new database session.')
+    #    session = CreateSession(engine)
+    #
+    #except sqlalchemy.exc.SQLAlchemyError as alch_err:
+    #    LOG.error(str(alch_err))
+    #    sys.exit(1)
 
-        LOG.debug('Creating new database session.')
-        session = CreateSession(engine)
-
-    except sqlalchemy.exc.SQLAlchemyError as alch_err:
-        LOG.error(str(alch_err))
-        sys.exit(1)
-
-    session.autoflush = False  # Autoflush is enabled by default.
+    #session.autoflush = False  # Autoflush is enabled by default.
 
     LOG.debug('Starting thrift server.')
     try:
         # Start thrift server.
-        handler = RemoteHandler(session, True)
+        handler = RemoteHandler()#session, True)
 
         processor = RemoteChecking.Processor(handler)
         transport = TSocket.TServerSocket(port=port)
@@ -96,7 +95,7 @@ def run_server(port, db_uri, callback_event=None):
             callback_event.set()
         LOG.debug('Starting to serve.')
         server.serve()
-        session.commit()
+        #session.commit()
     except socket.error as sockerr:
         LOG.error(str(sockerr))
         if sockerr.errno == errno.EADDRINUSE:
@@ -104,5 +103,5 @@ def run_server(port, db_uri, callback_event=None):
         sys.exit(1)
     except Exception as err:
         LOG.error(str(err))
-        session.commit()
+        #session.commit()
         sys.exit(1)

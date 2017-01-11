@@ -38,11 +38,47 @@ class RemoteClient(object):
         self.protocol = TBinaryProtocol.TBinaryProtocol(self.transport)
         self.client = RemoteChecking.Client(self.protocol)
 
-    def handshake(self):
-        self.transport.open()
-        result = self.client.Hello(20)
-        result2 = self.client.Hello(25)
-        self.transport.close()
+    # ------------------------------------------------------------
+    def ThriftClientCall(function):
+        # print type(function)
+        funcName = function.__name__
 
-        print("Result is", result, result2)
+        def wrapper(self, *args, **kwargs):
+            # print('['+host+':'+str(port)+'] >>>>> ['+funcName+']')
+            # before = datetime.datetime.now()
+            self.transport.open()
+            func = getattr(self.client, funcName)
+            try:
+                res = func(*args, **kwargs)
 
+            except shared.ttypes.RequestFailed as reqfailure:
+                if reqfailure.error_code == shared.ttypes.ErrorCode.DATABASE:
+                    print('Database error on server')
+                    print(str(reqfailure.message))
+                if reqfailure.error_code == shared.ttypes.ErrorCode.PRIVILEGE:
+                    print('Unauthorized access')
+                    print(str(reqfailure.message))
+                else:
+                    print('Other error')
+                    print(str(reqfailure))
+
+                sys.exit(1)
+            except TProtocolException:
+                print("Connection failed to {0}:{1}"
+                      .format(self.__host, self.__port))
+                sys.exit(1)
+            except socket.error as serr:
+                errCause = os.strerror(serr.errno)
+                print(errCause)
+                print(str(serr))
+                sys.exit(1)
+
+            self.transport.close()
+            return res
+
+        return wrapper
+
+    # ------------------------------------------------------------
+    @ThriftClientCall
+    def initConnection(self, run_name):
+        pass

@@ -302,6 +302,7 @@ def handle_check(args):
                           args.remote_host or '',
                           ':', args.remote_port, ']']))
 
+    log_file = None
     try:
         if not host_check.check_zlib():
             sys.exit(1)
@@ -313,7 +314,7 @@ def handle_check(args):
         if remote:
             rclient = daemon_client.RemoteClient(args.remote_host,
                                                  args.remote_port)
-            rclient.handshake()
+            rclient.initConnection(args.name)
 
             args.workspace = os.path.realpath(util.get_temporary_workspace())
 
