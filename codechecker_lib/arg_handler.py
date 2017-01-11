@@ -198,26 +198,28 @@ def handle_daemon(args):
     session_manager.SessionManager.CodeChecker_Workspace = workspace
     context.db_username = args.dbusername
 
-    check_env = analyzer_env.get_check_env(context.path_env_extra,
-                                           context.ld_lib_path_extra)
+    if False:
+        check_env = analyzer_env.get_check_env(context.path_env_extra,
+                                               context.ld_lib_path_extra)
 
-    sql_server = SQLServer.from_cmdline_args(args,
-                                             context.codechecker_workspace,
-                                             context.migration_root,
-                                             check_env)
+        sql_server = SQLServer.from_cmdline_args(args,
+                                                 context.codechecker_workspace,
+                                                 context.migration_root,
+                                                 check_env)
 
-    LOG.debug('Starting database for CodeChecker daemon.')
-    sql_server.start(context.db_version_info, wait_for_start=True,
-                     init=True)
+        LOG.debug('Starting database for CodeChecker daemon.')
+        sql_server.start(context.db_version_info, wait_for_start=True,
+                         init=True)
 
-    # Start database viewer.
-    db_connection_string = sql_server.get_connection_string()
+        # Start database viewer.
+        db_connection_string = sql_server.get_connection_string()
 
     is_server_started = multiprocessing.Event()
     server = multiprocessing.Process(target=daemon_server.run_server,
                                      args=(
                                          args.port,
-                                         db_connection_string,
+                                         '', #db_connection_string,
+                                         context.codechecker_workspace,
                                          is_server_started))
 
     server.daemon = True
@@ -366,9 +368,7 @@ def handle_check(args):
             # ---- Remote check mode ----
 
             LOG.debug("Logfile generation was successful in " + log_file)
-
-            LOG.info("--- READY TO UPLOAD INFORMATION TO SERVER ---")
-            print context.analyzer_binaries
+            LOG.debug("Generating initial transport...")
 
             # Send the build.json, the source codes and the dependency
             # metadata to the server.
@@ -378,7 +378,16 @@ def handle_check(args):
             #        format((fd.content is not None), fd.sha, fd.path))
             #print initialFiles
 
-            rclient.sendFileData(initialFiles)
+            LOG.debug("Sending initial transport to server...")
+            wrongFiles = rclient.sendFileData(args.name, initialFiles)
+
+            while len(wrongFiles) != 0:
+                LOG.debug(str(len(wrongFiles)) +
+                         " files reported by server to be wrong.")
+                fds = rclient.createFileDataFromPaths(wrongFiles)
+                wrongFiles = rclient.sendFileData(args.name, fds)
+
+            LOG.info('Required files successfully uploaded to remote server.')
 
     except Exception as ex:
         LOG.error(ex)

@@ -9,8 +9,10 @@ from __future__ import unicode_literals
 
 import datetime
 import errno
+import hashlib
 import ntpath
 import os
+import time
 import socket
 import sys
 
@@ -40,26 +42,76 @@ class RemoteHandler(object):
     perform checking on this remote, daemon machine.
     """
 
+    def _generate_folder(self, run_name):
+        return os.path.join(self.workspace, run_name)
+
     def initConnection(self, run_name):
         """
 
         """
 
-        print("Run-name", run_name)
+        if run_name in self._runningChecks:
+            if (datetime.now() - self._runningChecks[run_name])\
+                    .total_seconds() <= 60:
+                return False
+
+        LOG.info("Beginning to handle new remote check request for '" +
+                 run_name + "'")
+        self._runningChecks[run_name] = datetime.now()
+
+        # Check if the workspace folder for this run exists
+        folder = self._generate_folder(run_name)
+        if not os.path.exists(folder):
+            LOG.debug("Creating run folder at " + folder)
+            os.mkdir(folder)
 
         return True
 
-    def sendFileData(self, files):
+    def sendFileData(self, run_name, files):
         """
         Receives a list of files and metadata from
         the client for a given connection.
         """
+        if run_name not in self._runningChecks:
+            return
+        folder = self._generate_folder(run_name)
 
+        LOG.info("Received " + str(len(files)) + " file data for run '" + run_name + "'")
+
+        files_need_send = []
         for fd in files:
-            print( ('Content? {0}, SHA: {1}, Path: {2}'). \
-                format((fd.content is not None), fd.sha, fd.path))
+            # Twist the path so it refers to a place under the
+            # workspace/runname folder.
+            client_path = fd.path
+            if os.path.isabs(client_path):
+                # TODO: This won't work under Windows!
+                client_path = client_path.lstrip('/')
+            local_path = os.path.join(folder, client_path)
 
-        return len(files)
+            # We also need to check if the proper directory structure exists
+            if not os.path.exists(os.path.dirname(local_path)):
+                os.makedirs(os.path.dirname(local_path))
+
+            if fd.content is not None:
+                # For files that have content, we extract them to the run-folder
+                with open(local_path, 'w') as f:
+                    f.write(fd.content)
+            else:
+                # For files that don't have their content set, we check if the
+                # local version's hash (if exists) matches the client's hash
+                if not os.path.exists(local_path):
+                    files_need_send.append(fd.path)
+                else:
+                    with open(local_path, 'r') as f:
+                        sha = hashlib.sha1(f.read()).hexdigest()
+                        if sha != fd.sha:
+                            LOG.debug("File '" + fd.path + "' SHA mismatch.\n"
+                                "\tClient: " + fd.sha +
+                                "\tServer: " + sha)
+
+                            files_need_send.append(fd.path)
+
+        return files_need_send
 
     @decorators.catch_sqlalchemy
     def stopServer(self):
@@ -67,12 +119,13 @@ class RemoteHandler(object):
         """
         self.session.commit()
 
-    def __init__(self):#, session, lockDB):
-        pass
+    def __init__(self, workspace):#, session, lockDB):
+        self._runningChecks = {}
+        self.workspace = workspace
         #self.session = session
 
 
-def run_server(port, db_uri, callback_event=None):
+def run_server(port, db_uri, workspace, callback_event=None):
     LOG.debug('Starting CodeChecker daemon ...')
 
     #try:
@@ -90,7 +143,7 @@ def run_server(port, db_uri, callback_event=None):
     LOG.debug('Starting thrift server.')
     try:
         # Start thrift server.
-        handler = RemoteHandler()#session, True)
+        handler = RemoteHandler(workspace)#session, True)
 
         processor = RemoteChecking.Processor(handler)
         transport = TSocket.TServerSocket(port=port)
@@ -102,7 +155,7 @@ def run_server(port, db_uri, callback_event=None):
                                            tfactory,
                                            pfactory,
                                            daemon=True)
-        server.setNumThreads(1)  # TODO: Dev config --- please remove
+        server.setNumThreads(15)  # TODO: Dev config --- please remove
 
         LOG.info('Waiting for remote connections on [' + str(port) + ']')
         if callback_event:

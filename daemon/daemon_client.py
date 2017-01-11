@@ -88,7 +88,7 @@ class RemoteClient(object):
 
     # ------------------------------------------------------------
     @ThriftClientCall
-    def sendFileData(self, files):
+    def sendFileData(self, run_name, files):
         pass
 
     # ============================================================
@@ -104,7 +104,7 @@ class RemoteClient(object):
             logStr = f.read()
             logSha = hashlib.sha1(logStr).hexdigest()
 
-        logFD = FileData(log_file, logSha, logStr)
+        logFD = FileData('compilation_commands.json', logSha, logStr)
 
         # -----------------------------------
         # We need to send ALL source files (if they are in the build.json,
@@ -117,7 +117,7 @@ class RemoteClient(object):
 
             dependencyCommand = action.original_command.split(' ')
             dependencyCommand[0] = dependencyCommand[0] \
-                                   + ' -M -MQ"__dummy"'
+                + ' -M -MQ"__dummy"'
             dependencyCommand = ' '.join(dependencyCommand)
 
             p = subprocess.Popen(dependencyCommand,
@@ -131,7 +131,7 @@ class RemoteClient(object):
             if rc == 0:
                 # Parse 'Makefile' syntax dependency file
                 dependencies = output.replace('__dummy: ', '')\
-                    .replace(' \\', '')\
+                    .replace('\\', '')\
                     .replace('  ', '')\
                     .replace(' ', '\n')
 
@@ -158,3 +158,18 @@ class RemoteClient(object):
                 headerFDs.append(FileData(f, headSha, None))
 
         return [logFD] + sourceFDs + headerFDs
+
+    # ============================================================
+    def createFileDataFromPaths(self, path_list):
+        """
+        Reads the files specified by path_list and creates a FileData list
+        by reading and hashing these files to send them to the server.
+        """
+        fds = []
+        for f in path_list:
+            with open(f, 'r') as sf:
+                sourceStr = sf.read()
+                sourceSha = hashlib.sha1(sourceStr).hexdigest()
+                fds.append(FileData(f, sourceSha, sourceStr))
+
+        return fds
