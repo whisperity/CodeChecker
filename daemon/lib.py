@@ -9,6 +9,7 @@ import json
 import os
 import sys
 
+from codechecker_lib import analyzer
 from codechecker_lib import build_action
 from codechecker_lib import build_manager
 from codechecker_lib import log_parser
@@ -17,6 +18,7 @@ from codechecker_lib import util
 from codechecker_gen.daemonServer import RemoteChecking
 from codechecker_gen.daemonServer.ttypes import *
 import shared
+
 
 def __createDependencies(command):
     """
@@ -152,10 +154,17 @@ def __fix_compile_json(json, file_root):
 # ============================================================
 def handleChecking(run_name, file_root, context, LOG):
     args = __DummyArgs(
+        is_remote_checking=True,
+
+        name=run_name,
         logfile=os.path.join(file_root, "compilation_commands.json"),
 
-        # TODO: This is an advanced option, support for this later!
-        add_compiler_defaults=False
+        # TODO: These are advanced options, support for this later!
+        add_compiler_defaults=False,
+        jobs=1,
+        analyzers=['clangsa', 'clang-tidy'],
+        force=False,
+        keep_tmp=False,
     )
 
     # Before the log-file parsing can continue, we must first "hackfix" the log
@@ -187,6 +196,9 @@ def handleChecking(run_name, file_root, context, LOG):
                                    args.add_compiler_defaults)
 
     for action in actions:
-        print(action.__str__())
+        LOG.info("--------------------------------------------------------")
+        LOG.info(action.__str__())
 
-    #analyzer.run_check(args, actions, context)
+    analyzer.run_check(args, actions, context)
+
+    LOG.info("Analysis done!")

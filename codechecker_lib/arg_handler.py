@@ -169,6 +169,7 @@ def handle_server(args):
                                          args.not_host_only,
                                          context.db_version_info)
 
+
 def handle_daemon(args):
     """
     Starts the CodeChecker-as-a-Service daemon.
@@ -237,7 +238,7 @@ def handle_daemon(args):
                                          context,
                                          is_server_started))
 
-    server.daemon = True
+    #server.daemon = True
     server.start()
 
     # Wait a bit.
@@ -337,7 +338,7 @@ def handle_check(args):
             try:
                 rclient.initConnection(args.name)
             except Exception as e:
-                LOG.error("Couldn't initiate remote checking on [{0}:{1}]!"
+                LOG.error("Couldn't initiate remote checking on [{0}:{1}]"
                           .format(args.remote_host or 'localhost',
                                   args.remote_port))
                 sys.exit(1)

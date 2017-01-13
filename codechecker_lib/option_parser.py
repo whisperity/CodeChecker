@@ -36,6 +36,7 @@ COMPILE_OPTION_MAP = {
     '-iwithprefix': 1,
     '-iwithprefixbefore': 1,
     '-nostdinc': 0,
+    '-nostdinc++': 0,
     '-sysroot': 1
 }
 

@@ -174,7 +174,14 @@ def start_workers(args, actions, context, analyzer_config_map, skp_handler,
         finally:
             sys.exit(1)
 
-    signal.signal(signal.SIGINT, signal_handler)
+    try:
+        signal.signal(signal.SIGINT, signal_handler)
+    except ValueError:
+        # Don't raise exception if a remote checking is enabled -- the
+        # thread model of the daemon server would crash here as the starter
+        # is not a main thread.
+        if not args.is_remote_checking:
+            raise
 
     # Remove characters which could cause directory creation problems.
     no_spec_char_name = re.sub(r'[^\w\-_. ]', '_', args.name)
