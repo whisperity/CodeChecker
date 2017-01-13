@@ -5,13 +5,46 @@
 # -------------------------------------------------------------------------
 
 import hashlib
-import subprocess
+import os
 
 from codechecker_lib import build_action
+from codechecker_lib import util
 
 from codechecker_gen.daemonServer import RemoteChecking
 from codechecker_gen.daemonServer.ttypes import *
 import shared
+
+def __createDependencies(command):
+    """
+    Transforms the given original build 'command' to a command that, when
+    executed, is able to generate a dependency list.
+    """
+    if 'CC_LOGGER_GCC_LIKE' not in os.environ:
+        os.environ['CC_LOGGER_GCC_LIKE'] = 'gcc:g++:clang:clang++:cc:c++'
+    command = command.split(' ')
+
+    if command[0] in os.environ['CC_LOGGER_GCC_LIKE'].split(':'):
+        # gcc and clang can generate makefile-style dependency list
+        command[0] = command[0] + ' -M -MQ"__dummy"'
+
+        output, rc = util.call_command(' '.join(command),
+                                       env=os.environ, shell=True)
+        if rc == 0:
+            # Parse 'Makefile' syntax dependency file
+            dependencies = output.replace('__dummy: ', '') \
+                .replace('\\', '') \
+                .replace('  ', '') \
+                .replace(' ', '\n')
+
+            return dependencies.split('\n')
+        else:
+            raise Exception(
+                "Failed to generate dependency list for " +
+                command + "\n\nThe original output was: " + output)
+    else:
+        raise Exception("Cannot generate dependency list for build command " +
+                        command)
+
 
 # ============================================================
 def createInitialFileData(log_file, actions):
@@ -36,28 +69,10 @@ def createInitialFileData(log_file, actions):
     header_files = set()
     for action in actions:
         source_files = source_files.union(action.sources)
+        header_files = header_files.union(
+            __createDependencies(action.original_command))
 
-        dependency_command = action.original_command.split(' ')
-        dependency_command[0] = dependency_command[0] \
-                                + ' -M -MQ"__dummy"'
-        dependency_command = ' '.join(dependency_command)
 
-        p = subprocess.Popen(dependency_command,
-                             stdin=subprocess.PIPE,
-                             stdout=subprocess.PIPE,
-                             stderr=subprocess.PIPE,
-                             shell=True)
-        output, err = p.communicate()
-        rc = p.returncode
-
-        if rc == 0:
-            # Parse 'Makefile' syntax dependency file
-            dependencies = output.replace('__dummy: ', '')\
-                .replace('\\', '')\
-                .replace('  ', '')\
-                .replace(' ', '\n')
-
-            header_files = header_files.union(dependencies.split('\n'))
 
     source_fds = []
     for f in source_files:

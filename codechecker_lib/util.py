@@ -174,7 +174,7 @@ def remove_dir(path):
     shutil.rmtree(path, onerror=error_handler)
 
 
-def call_command(command, env=None):
+def call_command(command, env=None, shell=None):
     """ Call an external command and return with (output, return_code)."""
 
     try:
@@ -182,6 +182,7 @@ def call_command(command, env=None):
         out = subprocess.check_output(command,
                                       bufsize=-1,
                                       env=env,
+                                      shell=shell,
                                       stderr=subprocess.STDOUT)
         LOG.debug(out)
         return out, 0
