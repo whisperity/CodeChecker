@@ -5,9 +5,13 @@
 # -------------------------------------------------------------------------
 
 import hashlib
+import json
 import os
+import sys
 
 from codechecker_lib import build_action
+from codechecker_lib import build_manager
+from codechecker_lib import log_parser
 from codechecker_lib import util
 
 from codechecker_gen.daemonServer import RemoteChecking
@@ -110,3 +114,79 @@ def createFileDataFromPaths(path_list):
             fds.append(FileData(f, source_sha, source_str))
 
     return fds
+
+
+class __DummyArgs(object):
+    """
+    Mock to simulate a dot-accessible args object.
+    (via http://stackoverflow.com/a/652417/1428773)
+    """
+    def __init__(self, **kwargs):
+        self.__dict__.update(kwargs)
+
+
+def __fix_compile_json(json, file_root):
+    if 'CC_LOGGER_GCC_LIKE' not in os.environ:
+        os.environ['CC_LOGGER_GCC_LIKE'] = 'gcc:g++:clang:clang++:cc:c++'
+
+    for command in json:
+        command['file'] = os.path.join(file_root,
+                                       command['file'].lstrip('/'))
+        command['directory'] = os.path.join(file_root,
+                                            command['directory'].lstrip('/'))
+
+        if command['command'].split(' ')[0]\
+                in os.environ['CC_LOGGER_GCC_LIKE']:
+            command['command'] = command['command'].replace(
+                " -I", " -nostdinc --nostdinc++ -I", 1)
+            command['command'] = command['command'].replace(
+                " -I", " -I" + file_root)
+        else:
+            raise Exception(
+                "Cannot fix compilation action for build command " +
+                command + " --- used executable unknown")
+
+    return json
+
+
+# ============================================================
+def handleChecking(run_name, file_root, context, LOG):
+    args = __DummyArgs(
+        logfile=os.path.join(file_root, "compilation_commands.json"),
+
+        # TODO: This is an advanced option, support for this later!
+        add_compiler_defaults=False
+    )
+
+    # Before the log-file parsing can continue, we must first "hackfix" the log
+    # file so that it uses the paths under file_root, not the paths on the
+    # client's computer.
+    #
+    # TODO: HACK: This is a HACKFIX.
+    # TODO:       Later please implement a much more useful support for this!
+    fixed_file = os.path.join(os.path.dirname(args.logfile),
+                              os.path.basename(args.logfile).
+                                replace('.json', '.fixed.json'))
+
+    LOG.debug("Saving fixed log file to " + fixed_file)
+    with open(fixed_file, 'w') as outf:
+        with open(args.logfile, 'r') as inf:
+            commands = json.load(inf)
+            commands = __fix_compile_json(commands, file_root)
+            json.dump(commands, outf)
+
+    args.logfile = fixed_file
+
+    log_file = build_manager.check_log_file(args, context)
+    if not log_file:
+        LOG.error("Failed to generate compilation command file: " +
+                  log_file)
+        sys.exit(1)
+
+    actions = log_parser.parse_log(log_file,
+                                   args.add_compiler_defaults)
+
+    for action in actions:
+        print(action.__str__())
+
+    #analyzer.run_check(args, actions, context)

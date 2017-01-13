@@ -199,29 +199,42 @@ def handle_daemon(args):
     session_manager.SessionManager.CodeChecker_Workspace = workspace
     context.db_username = args.dbusername
 
-    if False:
-        check_env = analyzer_env.get_check_env(context.path_env_extra,
-                                               context.ld_lib_path_extra)
+    # Set up a checking environment and a database connection
+    check_env = analyzer_env.get_check_env(context.path_env_extra,
+                                           context.ld_lib_path_extra)
 
-        sql_server = SQLServer.from_cmdline_args(args,
-                                                 context.codechecker_workspace,
-                                                 context.migration_root,
-                                                 check_env)
+    sql_server = SQLServer.from_cmdline_args(args,
+                                             context. \
+                                             codechecker_workspace,
+                                             context.migration_root,
+                                             check_env)
 
-        LOG.debug('Starting database for CodeChecker daemon.')
-        sql_server.start(context.db_version_info, wait_for_start=True,
-                         init=True)
+    conn_mgr = client.ConnectionManager(sql_server, 'localhost',
+                                        util.get_free_port())
 
-        # Start database viewer.
-        db_connection_string = sql_server.get_connection_string()
+    sql_server.start(context.db_version_info, wait_for_start=True,
+                     init=True)
+
+    conn_mgr.start_report_server()
+
+    LOG.info("Checker server started.")
+
+    #analyzer.run_check(args, actions, context)
+
+    #LOG.info("Analysis has finished.")
+
+    #log_startserver_hint(args)
+
+    # Start database viewer.
+    db_connection_string = sql_server.get_connection_string()
 
     is_server_started = multiprocessing.Event()
     server = multiprocessing.Process(target=daemon_server.run_server,
                                      args=(
                                          args.host,
                                          args.port,
-                                         '', #db_connection_string,
-                                         context.codechecker_workspace,
+                                         db_connection_string,
+                                         context,
                                          is_server_started))
 
     server.daemon = True
@@ -320,7 +333,14 @@ def handle_check(args):
 
             rclient = daemon_client.RemoteClient(args.remote_host,
                                                  args.remote_port)
-            rclient.initConnection(args.name)
+
+            try:
+                rclient.initConnection(args.name)
+            except Exception as e:
+                LOG.error("Couldn't initiate remote checking on [{0}:{1}]!"
+                          .format(args.remote_host or 'localhost',
+                                  args.remote_port))
+                sys.exit(1)
 
         if not os.path.isdir(args.workspace):
             os.mkdir(args.workspace)
@@ -374,7 +394,8 @@ def handle_check(args):
 
             # Send the build.json, the source codes and the dependency
             # metadata to the server.
-            initialfiles = daemon_lib.createInitialFileData(log_file, actions)
+            initialfiles = daemon_lib.createInitialFileData(log_file,
+                                                            actions)
 
             LOG.debug("Sending initial transport to server...")
             wrongfiles = rclient.sendFileData(args.name, initialfiles)
@@ -388,7 +409,7 @@ def handle_check(args):
             LOG.info('Required files successfully uploaded to remote server.')
 
             # Tell the server that we have sent everything
-            rclient.beginChecking()
+            rclient.beginChecking(args.name)
 
     except Exception as ex:
         LOG.error(ex)
@@ -401,7 +422,10 @@ def handle_check(args):
                 os.remove(log_file)
 
             if remote:
-                shutil.rmtree(args.workspace)
+                try:
+                    shutil.rmtree(args.workspace)
+                except:
+                    pass
 
 
 def _do_quickcheck(args):

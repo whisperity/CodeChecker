@@ -35,5 +35,6 @@ service RemoteChecking {
 
     // after the client is sure that it fulfilled the server's request on every needed file,
     // this method begins to run the check on the server
-    void beginChecking()
+    void beginChecking(
+                       1: string run_name)
 }

@@ -31,6 +31,8 @@ from codechecker_lib import logger
 from codechecker_lib.logger import LoggerFactory
 from db_model.orm_model import *
 
+from . import lib as daemon_lib
+
 from codechecker_lib.profiler import profileit
 
 LOG = LoggerFactory.get_new_logger('CC DAEMON')
@@ -114,34 +116,38 @@ class RemoteHandler(object):
 
         return files_need_send
 
-    def beginChecking(self):
-        print("BEGIN CHECKING!")
+    def beginChecking(self, run_name):
+        daemon_lib.handleChecking(run_name,
+                                  self._generate_folder(run_name),
+                                  self.context,
+                                  LOG)
 
-    def __init__(self, workspace):#, session, lockDB):
+    def __init__(self, context, session):
         self._runningChecks = {}
-        self.workspace = workspace
-        #self.session = session
+        self.context = context
+        self.workspace = context.codechecker_workspace
+        self.session = session
 
 
-def run_server(host, port, db_uri, workspace, callback_event=None):
+def run_server(host, port, db_uri, context, callback_event=None):
     LOG.debug('Starting CodeChecker daemon ...')
 
-    #try:
-    #    engine = database_handler.SQLServer.create_engine(db_uri)
-    #
-    #    LOG.debug('Creating new database session.')
-    #    session = CreateSession(engine)
-    #
-    #except sqlalchemy.exc.SQLAlchemyError as alch_err:
-    #    LOG.error(str(alch_err))
-    #    sys.exit(1)
+    try:
+        engine = database_handler.SQLServer.create_engine(db_uri)
 
-    #session.autoflush = False  # Autoflush is enabled by default.
+        LOG.debug('Creating new database session.')
+        session = CreateSession(engine)
+
+    except sqlalchemy.exc.SQLAlchemyError as alch_err:
+        LOG.error(str(alch_err))
+        sys.exit(1)
+
+    session.autoflush = False  # Autoflush is enabled by default.
 
     LOG.debug('Starting thrift server.')
     try:
         # Start thrift server.
-        handler = RemoteHandler(workspace)#session, True)
+        handler = RemoteHandler(context, session)
 
         processor = RemoteChecking.Processor(handler)
         transport = TSocket.TServerSocket(host=host, port=port)
@@ -162,7 +168,7 @@ def run_server(host, port, db_uri, workspace, callback_event=None):
             callback_event.set()
         LOG.debug('Starting to serve.')
         server.serve()
-        #session.commit()
+        session.commit()
     except socket.error as sockerr:
         LOG.error(str(sockerr))
         if sockerr.errno == errno.EADDRINUSE:
@@ -170,5 +176,5 @@ def run_server(host, port, db_uri, workspace, callback_event=None):
         sys.exit(1)
     except Exception as err:
         LOG.error(str(err))
-        #session.commit()
+        session.commit()
         sys.exit(1)

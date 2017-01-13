@@ -26,6 +26,8 @@ import shared
 class RemoteClient(object):
 
     def __init__(self, host, port):
+        self.__host = host
+        self.__port = port
         self.socket = TSocket.TSocket(host, port)
         self.transport = TTransport.TBufferedTransport(self.socket)
         self.protocol = TBinaryProtocol.TBinaryProtocol(self.transport)
