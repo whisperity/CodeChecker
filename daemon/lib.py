@@ -20,29 +20,46 @@ from codechecker_gen.daemonServer.ttypes import *
 import shared
 
 
-def __createDependencies(command):
+def __createDependencies(action):
     """
     Transforms the given original build 'command' to a command that, when
     executed, is able to generate a dependency list.
     """
     if 'CC_LOGGER_GCC_LIKE' not in os.environ:
         os.environ['CC_LOGGER_GCC_LIKE'] = 'gcc:g++:clang:clang++:cc:c++'
-    command = command.split(' ')
+    command = action.original_command.split(' ')
 
     if command[0] in os.environ['CC_LOGGER_GCC_LIKE'].split(':'):
         # gcc and clang can generate makefile-style dependency list
-        command[0] = command[0] + ' -M -MQ"__dummy"'
+        command[0] = command[0] + ' -E -M -MQ"__dummy"'
+
+        try:
+            option_index = command.index('-o')
+        except ValueError:
+            # Indicates that '-o' is not in the command list
+
+            try:
+                option_index = command.index('--output')
+            except ValueError:
+                # Indicates that '--output' isn't either..
+                option_index = None
+
+        if option_index:
+            # If an output file is set, the dependency is not written to the
+            # standard output but rather into the given file.
+            # We need to first eliminate the output from the command
+            command = command[0:option_index] + command[option_index+2:]
 
         output, rc = util.call_command(' '.join(command),
                                        env=os.environ, shell=True)
         if rc == 0:
-            # Parse 'Makefile' syntax dependency file
+            # Parse 'Makefile' syntax dependency output
             dependencies = output.replace('__dummy: ', '') \
                 .replace('\\', '') \
                 .replace('  ', '') \
                 .replace(' ', '\n')
 
-            return dependencies.split('\n')
+            return [dep for dep in dependencies.split('\n') if dep != ""]
         else:
             raise Exception(
                 "Failed to generate dependency list for " +
@@ -75,10 +92,7 @@ def createInitialFileData(log_file, actions):
     header_files = set()
     for action in actions:
         source_files = source_files.union(action.sources)
-        header_files = header_files.union(
-            __createDependencies(action.original_command))
-
-
+        header_files = header_files.union(__createDependencies(action))
 
     source_fds = []
     for f in source_files:
@@ -132,17 +146,25 @@ def __fix_compile_json(json, file_root):
         os.environ['CC_LOGGER_GCC_LIKE'] = 'gcc:g++:clang:clang++:cc:c++'
 
     for command in json:
+        new_directory = os.path.join(file_root,
+                                    command['directory'].lstrip('/'))
+
+        # Fix source and target file paths in the command itself
+        command['command'] = command['command'].replace(command['directory'],
+                                                        new_directory)
+
         command['file'] = os.path.join(file_root,
                                        command['file'].lstrip('/'))
-        command['directory'] = os.path.join(file_root,
-                                            command['directory'].lstrip('/'))
+        command['directory'] = new_directory
 
+        # Fix include paths
         if command['command'].split(' ')[0]\
                 in os.environ['CC_LOGGER_GCC_LIKE']:
+
             command['command'] = command['command'].replace(
-                " -I", " -nostdinc --nostdinc++ -I", 1)
+                " -Isystem/", " -Isystem" + file_root + "/")
             command['command'] = command['command'].replace(
-                " -I", " -I" + file_root)
+                " -I/", " -I" + file_root + "/")
         else:
             raise Exception(
                 "Cannot fix compilation action for build command " +
@@ -182,7 +204,7 @@ def handleChecking(run_name, file_root, context, LOG):
         with open(args.logfile, 'r') as inf:
             commands = json.load(inf)
             commands = __fix_compile_json(commands, file_root)
-            json.dump(commands, outf)
+            json.dump(commands, outf, indent=4)
 
     args.logfile = fixed_file
 
@@ -195,9 +217,9 @@ def handleChecking(run_name, file_root, context, LOG):
     actions = log_parser.parse_log(log_file,
                                    args.add_compiler_defaults)
 
-    for action in actions:
-        LOG.info("--------------------------------------------------------")
-        LOG.info(action.__str__())
+    #for action in actions:
+    #    LOG.info("--------------------------------------------------------")
+    #    LOG.info(action.__str__())
 
     analyzer.run_check(args, actions, context)
 

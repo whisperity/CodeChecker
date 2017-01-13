@@ -220,12 +220,6 @@ def handle_daemon(args):
 
     LOG.info("Checker server started.")
 
-    #analyzer.run_check(args, actions, context)
-
-    #LOG.info("Analysis has finished.")
-
-    #log_startserver_hint(args)
-
     # Start database viewer.
     db_connection_string = sql_server.get_connection_string()
 
@@ -238,7 +232,6 @@ def handle_daemon(args):
                                          context,
                                          is_server_started))
 
-    #server.daemon = True
     server.start()
 
     # Wait a bit.

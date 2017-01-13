@@ -178,7 +178,7 @@ def call_command(command, env=None, shell=None):
     """ Call an external command and return with (output, return_code)."""
 
     try:
-        LOG.debug('Run ' + ' '.join(command))
+        LOG.debug("Run '" + command + "'")
         out = subprocess.check_output(command,
                                       bufsize=-1,
                                       env=env,
@@ -187,7 +187,7 @@ def call_command(command, env=None, shell=None):
         LOG.debug(out)
         return out, 0
     except subprocess.CalledProcessError as ex:
-        LOG.debug('Running command "' + ' '.join(command) + '" Failed.')
+        LOG.debug('Running command "' + command + '" Failed.')
         LOG.debug(str(ex.returncode))
         LOG.debug(ex.output)
         return ex.output, ex.returncode
