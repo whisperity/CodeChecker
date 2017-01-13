@@ -47,7 +47,8 @@ class RemoteHandler(object):
 
     def initConnection(self, run_name):
         """
-
+        Sets up a remote checking's environment on the server based on a
+        client's request.
         """
 
         if run_name in self._runningChecks:
@@ -113,11 +114,8 @@ class RemoteHandler(object):
 
         return files_need_send
 
-    @decorators.catch_sqlalchemy
-    def stopServer(self):
-        """
-        """
-        self.session.commit()
+    def beginChecking(self):
+        print("BEGIN CHECKING!")
 
     def __init__(self, workspace):#, session, lockDB):
         self._runningChecks = {}
@@ -125,7 +123,7 @@ class RemoteHandler(object):
         #self.session = session
 
 
-def run_server(port, db_uri, workspace, callback_event=None):
+def run_server(host, port, db_uri, workspace, callback_event=None):
     LOG.debug('Starting CodeChecker daemon ...')
 
     #try:
@@ -146,7 +144,7 @@ def run_server(port, db_uri, workspace, callback_event=None):
         handler = RemoteHandler(workspace)#session, True)
 
         processor = RemoteChecking.Processor(handler)
-        transport = TSocket.TServerSocket(port=port)
+        transport = TSocket.TServerSocket(host=host, port=port)
         tfactory = TTransport.TBufferedTransportFactory()
         pfactory = TBinaryProtocol.TBinaryProtocolFactory()
 
@@ -157,7 +155,9 @@ def run_server(port, db_uri, workspace, callback_event=None):
                                            daemon=True)
         server.setNumThreads(15)  # TODO: Dev config --- please remove
 
-        LOG.info('Waiting for remote connections on [' + str(port) + ']')
+        LOG.info('Waiting for remote connections on [' +
+                 (host if host else '') + ':' + str(port) + ']')
+
         if callback_event:
             callback_event.set()
         LOG.debug('Starting to serve.')

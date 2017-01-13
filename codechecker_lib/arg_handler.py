@@ -30,8 +30,9 @@ from codechecker_lib import util
 from codechecker_lib.logger import LoggerFactory
 from codechecker_lib.analyzers import analyzer_types
 from codechecker_lib.database_handler import SQLServer
-from daemon import daemon_client
-from daemon import daemon_server
+from daemon import client as daemon_client
+from daemon import server as daemon_server
+from daemon import lib as daemon_lib
 from viewer_server import client_db_access_server
 
 LOG = LoggerFactory.get_new_logger('ARG_HANDLER')
@@ -217,6 +218,7 @@ def handle_daemon(args):
     is_server_started = multiprocessing.Event()
     server = multiprocessing.Process(target=daemon_server.run_server,
                                      args=(
+                                         args.host,
                                          args.port,
                                          '', #db_connection_string,
                                          context.codechecker_workspace,
@@ -372,22 +374,21 @@ def handle_check(args):
 
             # Send the build.json, the source codes and the dependency
             # metadata to the server.
-            initialFiles = rclient.createInitialFileData(log_file, actions)
-            #for fd in initialFiles:
-            #    print( ('Content? {0}, SHA: {1}, Path: {2}'). \
-            #        format((fd.content is not None), fd.sha, fd.path))
-            #print initialFiles
+            initialfiles = daemon_lib.createInitialFileData(log_file, actions)
 
             LOG.debug("Sending initial transport to server...")
-            wrongFiles = rclient.sendFileData(args.name, initialFiles)
+            wrongfiles = rclient.sendFileData(args.name, initialfiles)
 
-            while len(wrongFiles) != 0:
-                LOG.debug(str(len(wrongFiles)) +
-                         " files reported by server to be wrong.")
-                fds = rclient.createFileDataFromPaths(wrongFiles)
-                wrongFiles = rclient.sendFileData(args.name, fds)
+            while len(wrongfiles) != 0:
+                LOG.debug(str(len(wrongfiles)) +
+                          " files reported by server as required.")
+                fds = daemon_lib.createFileDataFromPaths(wrongfiles)
+                wrongfiles = rclient.sendFileData(args.name, fds)
 
             LOG.info('Required files successfully uploaded to remote server.')
+
+            # Tell the server that we have sent everything
+            rclient.beginChecking()
 
     except Exception as ex:
         LOG.error(ex)
@@ -400,8 +401,7 @@ def handle_check(args):
                 os.remove(log_file)
 
             if remote:
-                pass
-                #shutil.rmtree(args.workspace)
+                shutil.rmtree(args.workspace)
 
 
 def _do_quickcheck(args):
