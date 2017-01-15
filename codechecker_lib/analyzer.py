@@ -107,7 +107,12 @@ def run_check(args, actions, context):
     skip_handler = _get_skip_handler(args)
 
     with client.get_connection() as connection:
-        context.run_id = connection.add_checker_run(' '.join(sys.argv),
+        if args.__dict__.get('is_remote_checking', False):
+            command = args.local_invocation
+        else:
+            command = ' '.join(sys.argv)
+
+        context.run_id = connection.add_checker_run(command,
                                                     args.name,
                                                     context.version,
                                                     args.force)

@@ -20,7 +20,7 @@ from codechecker_gen.daemonServer.ttypes import *
 import shared
 
 
-def __createDependencies(action):
+def __create_dependencies(action):
     """
     Transforms the given original build 'command' to a command that, when
     executed, is able to generate a dependency list.
@@ -69,8 +69,7 @@ def __createDependencies(action):
                         command)
 
 
-# ============================================================
-def createInitialFileData(log_file, actions):
+def create_initial_file_data(log_file, actions):
     """
     Transforms the given BuildAction list to generate a list
     of FileData that needs to be sent to the remote server.
@@ -92,7 +91,7 @@ def createInitialFileData(log_file, actions):
     header_files = set()
     for action in actions:
         source_files = source_files.union(action.sources)
-        header_files = header_files.union(__createDependencies(action))
+        header_files = header_files.union(__create_dependencies(action))
 
     source_fds = []
     for f in source_files:
@@ -116,8 +115,8 @@ def createInitialFileData(log_file, actions):
 
     return [log_fd] + source_fds + header_fds
 
-# ============================================================
-def createFileDataFromPaths(path_list):
+
+def create_file_data_from_paths(path_list):
     """
     Reads the files specified by path_list and creates a FileData list
     by reading and hashing these files to send them to the server.
@@ -130,15 +129,6 @@ def createFileDataFromPaths(path_list):
             fds.append(FileData(f, source_sha, source_str))
 
     return fds
-
-
-class __DummyArgs(object):
-    """
-    Mock to simulate a dot-accessible args object.
-    (via http://stackoverflow.com/a/652417/1428773)
-    """
-    def __init__(self, **kwargs):
-        self.__dict__.update(kwargs)
 
 
 def __fix_compile_json(json, file_root):
@@ -173,21 +163,70 @@ def __fix_compile_json(json, file_root):
     return json
 
 
-# ============================================================
-def handleChecking(run_name, file_root, context, LOG):
+class __DummyArgs(object):
+    """
+    Mock to simulate a dot-accessible args object.
+    (via http://stackoverflow.com/a/652417/1428773)
+    """
+
+    def __init__(self, **kwargs):
+        self.__dict__.update(kwargs)
+
+
+CHECK_ARGS_TO_COMMUNICATE = ['local_invocation',
+                             'analyzers',
+                             'saargs',
+                             'tidyargs',
+                             'ordered_checkers'
+                             ]
+
+
+def pack_check_args(args):
+    """
+    Filters the original (clientside) check invocation arguments and packs them into a json string to send to
+    the daemon.
+    """
+
+    data = {}
+    for key in CHECK_ARGS_TO_COMMUNICATE:
+        if key in args.__dict__:
+            data[key] = getattr(args, key)
+
+    return json.dumps(data)
+
+
+def unpack_check_args(args, args_json):
+    """
+    Unpack the received client args json into a 'Namespace'-like dummy object usable by the rest of CodeChecker.
+    """
+
+    data = json.loads(args_json)
+    if type(data) is not dict:
+        raise ValueError("The checking configuration sent over the wire must be a JSON-encoded dictionary.")
+
+    for key in data.keys():
+        if key in CHECK_ARGS_TO_COMMUNICATE and key not in args.__dict__:
+            args.__dict__[key] = data[key]
+
+
+
+def handle_checking(run_name, file_root, session_data, context, LOG):
     args = __DummyArgs(
+        # Mandatory field for indicating that the checking does NOT take place on a local machine!
         is_remote_checking=True,
 
+        # Field overrides due to remote context,
         name=run_name,
         logfile=os.path.join(file_root, "compilation_commands.json"),
 
-        # TODO: These are advanced options, support for this later!
+        # TODO: Review these overrides!
         add_compiler_defaults=False,
         jobs=1,
-        analyzers=['clangsa', 'clang-tidy'],
         force=False,
-        keep_tmp=False,
+        keep_tmp=False
     )
+
+    unpack_check_args(args, session_data['argsjson'])
 
     # Before the log-file parsing can continue, we must first "hackfix" the log
     # file so that it uses the paths under file_root, not the paths on the

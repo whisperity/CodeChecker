@@ -323,13 +323,14 @@ def handle_check(args):
         # In remote mode, connect to the remote daemon
         # and use a temporary workspace
         if remote:
+            args.local_invocation = ' '.join(sys.argv)
             args.workspace = os.path.realpath(util.get_temporary_workspace())
 
             rclient = daemon_client.RemoteClient(args.remote_host,
                                                  args.remote_port)
 
             try:
-                rclient.initConnection(args.name)
+                rclient.initConnection(args.name, daemon_lib.pack_check_args(args))
             except Exception as e:
                 LOG.error(e.message)
                 LOG.error("Couldn't initiate remote checking on [{0}:{1}]"
@@ -389,8 +390,8 @@ def handle_check(args):
 
             # Send the build.json, the source codes and the dependency
             # metadata to the server.
-            initialfiles = daemon_lib.createInitialFileData(log_file,
-                                                            actions)
+            initialfiles = daemon_lib.create_initial_file_data(log_file,
+                                                               actions)
 
             LOG.debug("Sending initial transport to server...")
             wrongfiles = rclient.sendFileData(args.name, initialfiles)
@@ -398,7 +399,7 @@ def handle_check(args):
             while len(wrongfiles) != 0:
                 LOG.debug(str(len(wrongfiles)) +
                           " files reported by server as required.")
-                fds = daemon_lib.createFileDataFromPaths(wrongfiles)
+                fds = daemon_lib.create_file_data_from_paths(wrongfiles)
                 wrongfiles = rclient.sendFileData(args.name, fds)
 
             LOG.info('Required files successfully uploaded to remote server.')

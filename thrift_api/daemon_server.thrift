@@ -25,7 +25,9 @@ service RemoteChecking {
 
     // call the remote server and notify that we wish to execute remote checking
     bool initConnection(
-                        1: string run_name)
+                        1: string run_name,
+                        2: string check_args)
+                        throws (1: shared.RequestFailed requestError),
 
     // sends a list of files to the server to notify the server about the state of files on the client machine
     // the return value indicates a list of files that the server reported as non-matching the local hash

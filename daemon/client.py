@@ -75,7 +75,7 @@ class RemoteClient(object):
 
     # ------------------------------------------------------------
     @ThriftClientCall
-    def initConnection(self, run_name):
+    def initConnection(self, run_name, check_args):
         pass
 
     # ------------------------------------------------------------

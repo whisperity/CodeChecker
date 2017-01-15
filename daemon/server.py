@@ -47,20 +47,24 @@ class RemoteHandler(object):
     def _generate_folder(self, run_name):
         return os.path.join(self.workspace, run_name)
 
-    def initConnection(self, run_name):
+    def initConnection(self, run_name, check_args):
         """
         Sets up a remote checking's environment on the server based on a
         client's request.
         """
 
         if run_name in self._runningChecks:
-            if (datetime.now() - self._runningChecks[run_name])\
-                    .total_seconds() <= 60:
-                return False
+            if (datetime.now() - self._runningChecks[run_name]['timestamp'])\
+                    .total_seconds() <= 5:
+                LOG.info("Refusing to do '" + run_name + "' as a run named like so is already being done!")
+                raise shared.ttypes.RequestFailed(
+                    shared.ttypes.ErrorCode.GENERAL,
+                    str("A run named '" + run_name + "' is already in progress."))
 
         LOG.info("Beginning to handle new remote check request for '" +
                  run_name + "'")
-        self._runningChecks[run_name] = datetime.now()
+        self._runningChecks[run_name] = {'timestamp': datetime.now(),
+                                         'argsjson': check_args}
 
         # Check if the workspace folder for this run exists
         folder = self._generate_folder(run_name)
@@ -117,10 +121,12 @@ class RemoteHandler(object):
         return files_need_send
 
     def beginChecking(self, run_name):
-        daemon_lib.handleChecking(run_name,
-                                  self._generate_folder(run_name),
-                                  self.context,
-                                  LOG)
+        daemon_lib.handle_checking(run_name,
+                                   self._generate_folder(run_name),
+                                   self._runningChecks[run_name],
+                                   self.context,
+                                   LOG)
+        del self._runningChecks[run_name]
 
     def __init__(self, context, session):
         self._runningChecks = {}

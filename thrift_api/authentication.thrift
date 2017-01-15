@@ -27,5 +27,5 @@ service codeCheckerAuthentication {
 
   // performs logout action for the user (must be called from the corresponding valid session)
   bool destroySession()
-             throws (1: shared.RequestFailed requestError)
+                      throws (1: shared.RequestFailed requestError)
 }
