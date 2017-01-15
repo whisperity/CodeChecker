@@ -311,7 +311,7 @@ def handle_check(args):
     if remote:
         LOG.info(''.join(['Using remote check at [',
                           args.remote_host or '',
-                          ':', args.remote_port, ']']))
+                          ':', str(args.remote_port), ']']))
 
     log_file = None
     try:
@@ -331,6 +331,7 @@ def handle_check(args):
             try:
                 rclient.initConnection(args.name)
             except Exception as e:
+                LOG.error(e.message)
                 LOG.error("Couldn't initiate remote checking on [{0}:{1}]"
                           .format(args.remote_host or 'localhost',
                                   args.remote_port))
