@@ -10,6 +10,7 @@ from __future__ import unicode_literals
 import datetime
 import errno
 import hashlib
+import multiprocessing
 import ntpath
 import os
 import time
@@ -120,13 +121,36 @@ class RemoteHandler(object):
 
         return files_need_send
 
-    def beginChecking(self, run_name):
-        daemon_lib.handle_checking(run_name,
-                                   self._generate_folder(run_name),
-                                   self._runningChecks[run_name],
-                                   self.context,
-                                   LOG)
-        del self._runningChecks[run_name]
+    def beginChecking(self, run_name, disconnect_immediately):
+        """"""
+
+        def __end_check_callback(self):
+            print('Check runner subprocess exited.')
+            LOG.info('Check runner subprocess exited.')
+            del self._runningChecks[run_name]
+            print(self._runningChecks)
+
+        print(self._runningChecks)
+
+        check_process = multiprocessing.Process(target=daemon_lib.handle_checking,
+                                                args=(
+                                                    run_name,
+                                                    self._generate_folder(run_name),
+                                                    self._runningChecks[run_name],
+                                                    self.context,
+                                                    __end_check_callback(self),
+                                                    LOG))
+
+        LOG.info('Starting check in a sub-process...')
+        check_process.start()
+
+        if not disconnect_immediately:
+            # If the user wants to wait for the checking to finish, then we shall wait
+            LOG.debug('Check running. Keeping connection alive until check is over...')
+            check_process.join()
+        else:
+            LOG.debug('User did not request keep-alive. Goodbye!')
+
 
     def __init__(self, context, session):
         self._runningChecks = {}

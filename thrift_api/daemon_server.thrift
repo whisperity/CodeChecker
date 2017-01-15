@@ -32,11 +32,12 @@ service RemoteChecking {
     // sends a list of files to the server to notify the server about the state of files on the client machine
     // the return value indicates a list of files that the server reported as non-matching the local hash
     PathList sendFileData(
-                          1: string run_name
+                          1: string   run_name
                           2: FileList files)
 
     // after the client is sure that it fulfilled the server's request on every needed file,
     // this method begins to run the check on the server
     void beginChecking(
-                       1: string run_name)
+                       1: string run_name,
+                       2: bool   disconnect_immediately)
 }

@@ -85,5 +85,5 @@ class RemoteClient(object):
 
     # ------------------------------------------------------------
     @ThriftClientCall
-    def beginChecking(self):
+    def beginChecking(self, run_name, disconnect_immediately):
         pass

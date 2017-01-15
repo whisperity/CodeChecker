@@ -210,7 +210,7 @@ def unpack_check_args(args, args_json):
 
 
 
-def handle_checking(run_name, file_root, session_data, context, LOG):
+def handle_checking(run_name, file_root, session_data, context, callback=None, LOG=None):
     args = __DummyArgs(
         # Mandatory field for indicating that the checking does NOT take place on a local machine!
         is_remote_checking=True,
@@ -263,3 +263,6 @@ def handle_checking(run_name, file_root, session_data, context, LOG):
     analyzer.run_check(args, actions, context)
 
     LOG.info("Analysis done!")
+
+    if callback:
+        callback()

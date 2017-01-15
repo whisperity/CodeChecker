@@ -405,7 +405,10 @@ def handle_check(args):
             LOG.info('Required files successfully uploaded to remote server.')
 
             # Tell the server that we have sent everything
-            rclient.beginChecking(args.name)
+            rclient.beginChecking(args.name, not args.remote_keepalive)
+
+            if args.remote_keepalive:
+                LOG.info('Server reported the analysis to be over.')
 
     except Exception as ex:
         LOG.error(ex)

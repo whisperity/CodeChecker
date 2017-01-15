@@ -316,6 +316,15 @@ Build command which is used to build the project.''')
                                   ' port to check the project, instead of a '
                                   'local instance.')
 
+        check_parser.add_argument('--remote-keep-alive',
+                                  dest="remote_keepalive",
+                                  default=False,
+                                  action='store_true',
+                                  required=False,
+                                  help='If set, the local command will not '
+                                       'exit until the server reports that '
+                                       'checking has finished.')
+
         add_analyzer_arguments(check_parser)
         add_database_arguments(check_parser)
         add_verbose_arguments(check_parser)
