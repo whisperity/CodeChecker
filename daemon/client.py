@@ -93,3 +93,8 @@ class RemoteClient(object):
     @ThriftClientCall
     def beginChecking(self, token, disconnect_immediately):
         pass
+
+    # ------------------------------------------------------------
+    @ThriftClientCall
+    def getCheckerList(self, args_json):
+        pass

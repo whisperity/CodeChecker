@@ -55,46 +55,40 @@ def handle_list_checkers(args):
     List the supported checkers by the analyzers.
     List the default enabled and disabled checkers in the config.
     """
-    context = generic_package_context.get_context()
-    # If nothing is set, list checkers for all supported analyzers.
-    enabled_analyzers = args.analyzers or analyzer_types.supported_analyzers
-    analyzer_environment = analyzer_env.get_check_env(
-        context.path_env_extra,
-        context.ld_lib_path_extra)
 
-    for ea in enabled_analyzers:
-        if ea not in analyzer_types.supported_analyzers:
-            LOG.error('Unsupported analyzer ' + str(ea))
-            sys.exit(1)
+    remote = 'remote_host' in args or \
+             'remote_port' in args
+    if remote:
+        # Set the default values here if the user did specify that we go
+        # remote, but didn't specify EVERY variable.
 
-    analyzer_config_map = \
-        analyzer_types.build_config_handlers(args,
-                                             context,
-                                             enabled_analyzers)
+        if not getattr(args, 'remote_host', None):
+            setattr(args, 'remote_host', 'localhost')
+        if not getattr(args, 'remote_port', None):
+            setattr(args, 'remote_port', 8002)
 
-    for ea in enabled_analyzers:
-        # Get the config.
-        config_handler = analyzer_config_map.get(ea)
-        source_analyzer = \
-            analyzer_types.construct_analyzer_type(ea,
-                                                   config_handler,
-                                                   None)
+    if not remote:
+        # ---- Local query ----
 
-        checkers = source_analyzer.get_analyzer_checkers(config_handler,
-                                                         analyzer_environment)
+        checkers = analyzer_types.get_checkers(
+            generic_package_context.get_context(), args)
+    else:
+        # ---- Remote query ----
 
-        default_checker_cfg = context.default_checkers_config.get(
-            ea + '_checkers')
+        rclient = daemon_client.RemoteClient(args.remote_host,
+                                             args.remote_port)
+        checkers = rclient.getCheckerList(
+            json.dumps({'analyzers': args.analyzers
+                        }))
+        checkers = map(lambda chk: (chk.checker_name, chk.enabled,
+                                    chk.description),
+                       checkers)
 
-        analyzer_types.initialize_checkers(config_handler,
-                                           checkers,
-                                           default_checker_cfg)
-        for checker_name, value in config_handler.checks().items():
-            enabled, description = value
-            if enabled:
-                print(' + {0:50} {1}'.format(checker_name, description))
-            else:
-                print(' - {0:50} {1}'.format(checker_name, description))
+    for checker_name, enabled, description in checkers:
+        if enabled:
+            print(' + {0:50} {1}'.format(checker_name, description))
+        else:
+            print(' - {0:50} {1}'.format(checker_name, description))
 
 
 def handle_server(args):

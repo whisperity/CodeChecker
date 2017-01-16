@@ -11,6 +11,7 @@ from argparse import Namespace
 import datetime
 import errno
 import hashlib
+import json
 import ntpath
 import os
 import time
@@ -27,7 +28,9 @@ from thrift.server import TServer
 from thrift.transport import TSocket
 from thrift.transport import TTransport
 
+from codechecker_lib.analyzers import analyzer_types
 from codechecker_lib import database_handler
+from codechecker_lib import generic_package_context
 from codechecker_lib.logger import LoggerFactory
 from codechecker_lib import util
 from db_model.orm_model import *
@@ -245,6 +248,23 @@ class RemoteHandler(object):
             check_process.join()
         else:
             LOG.debug('User did not request keep-alive. Goodbye!')
+
+    def getCheckerList(self, args_json):
+        """Retrieve the list of checkers available on the server."""
+        args = json.loads(args_json)
+        args = Namespace(
+            analyzers=args['analyzers']
+        )
+
+        checkers = analyzer_types.get_checkers(
+            generic_package_context.get_context(), args)
+
+        checker_records = []
+        for checker_name, enabled, description in checkers:
+            checker_records.append(Checker(checker_name, enabled,
+                                           description))
+
+        return checker_records
 
     def __init__(self, context, session):
         self._running_checks = {}

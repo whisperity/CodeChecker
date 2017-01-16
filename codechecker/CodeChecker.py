@@ -428,6 +428,23 @@ Build command which is used to build the project.''')
                                'should be listed.\nCurrently supported '
                                'analyzers:\n' + analyzers)
 
+        checker_p.add_argument('--remote-host', '--host', '-r',
+                               dest="remote_host",
+                               default=argparse.SUPPRESS,
+                               required=False,
+                               help='Use a remote daemon available at this'
+                                    ' host to query the checkers instead of '
+                                    'the local computer')
+
+        checker_p.add_argument('--remote-port', '-p',
+                               dest="remote_port",
+                               type=int,
+                               default=argparse.SUPPRESS,
+                               required=False,
+                               help='Use a remote daemon available on this'
+                                    ' port to query the checkers, instead of '
+                                    ' the local install.')
+
         add_verbose_arguments(checker_p)
         checker_p.set_defaults(func=arg_handler.handle_list_checkers)
 

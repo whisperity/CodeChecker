@@ -161,6 +161,49 @@ def initialize_checkers(config_handler,
                 config_handler.disable_checker(checker_name)
 
 
+def get_checkers(context, args):
+    # If nothing is set, list checkers for all supported analyzers.
+    enabled_analyzers = args.analyzers or supported_analyzers
+    analyzer_environment = analyzer_env.get_check_env(
+        context.path_env_extra,
+        context.ld_lib_path_extra)
+
+    for ea in enabled_analyzers:
+        if ea not in supported_analyzers:
+            raise ValueError('Unsupported analyzer ' + str(ea))
+
+    analyzer_config_map = \
+        build_config_handlers(args,
+                              context,
+                              enabled_analyzers)
+
+    checker_list = []
+
+    for ea in enabled_analyzers:
+        # Get the config.
+        config_handler = analyzer_config_map.get(ea)
+        source_analyzer = \
+            construct_analyzer_type(ea,
+                                    config_handler,
+                                    None)
+
+        checkers = source_analyzer.get_analyzer_checkers(config_handler,
+                                                         analyzer_environment)
+
+        default_checker_cfg = context.default_checkers_config.get(
+            ea + '_checkers')
+
+        initialize_checkers(config_handler,
+                            checkers,
+                            default_checker_cfg)
+
+        for checker_name, value in config_handler.checks().items():
+            enabled, description = value
+            checker_list.append((checker_name, enabled, description))
+
+    return checker_list
+
+
 def __replace_env_var(cfg_file):
     def replacer(matchobj):
         env_var = matchobj.group(1)

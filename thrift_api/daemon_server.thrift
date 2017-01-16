@@ -25,6 +25,14 @@ struct FileData {
 }
 typedef list<FileData> FileList
 
+//-----------------------------------------------------------------------------
+struct Checker {
+    1: string checker_name,
+    2: bool   enabled,
+    3: string description
+}
+typedef list<Checker> CheckerList
+
 
 //-----------------------------------------------------------------------------
 // The order of the functions indicates the order that must be maintained when
@@ -55,5 +63,10 @@ service RemoteChecking {
     void beginChecking(
                        1: string token,
                        2: bool   disconnect_immediately)
-                       throws (1: shared.RequestFailed requestError)
+                       throws (1: shared.RequestFailed requestError),
+
+    // get the list of checkers available on the daemon server
+    CheckerList getCheckerList(
+                               1: string args_json)
+
 }
