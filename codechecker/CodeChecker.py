@@ -306,7 +306,7 @@ Build command which is used to build the project.''')
 
         check_parser.add_argument('--remote-host', '--host', '-r',
                                   dest="remote_host",
-                                  default=None,
+                                  default=argparse.SUPPRESS,
                                   required=False,
                                   help='Use a remote daemon available at this'
                                   ' host to check the project instead of the '
@@ -315,7 +315,7 @@ Build command which is used to build the project.''')
         check_parser.add_argument('--remote-port', '-p',
                                   dest="remote_port",
                                   type=int,
-                                  default=0,
+                                  default=argparse.SUPPRESS,
                                   required=False,
                                   help='Use a remote daemon available on this'
                                   ' port to check the project, instead of a '
@@ -323,7 +323,7 @@ Build command which is used to build the project.''')
 
         check_parser.add_argument('--remote-keep-alive',
                                   dest="remote_keepalive",
-                                  default=False,
+                                  default=argparse.SUPPRESS,
                                   action='store_true',
                                   required=False,
                                   help='If set, the local command will not '

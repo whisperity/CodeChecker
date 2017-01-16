@@ -68,19 +68,27 @@ def _create_dependencies(action):
                         command)
 
 
-def create_initial_file_data(log_file, actions, include_contents_for_all):
+def create_initial_file_data(args, actions, include_contents_for_all):
     """
     Transforms the given BuildAction list to generate a list
     of FileData that needs to be sent to the remote server.
     """
 
     # -----------------------------------
-    # The log_file must ALWAYS be sent
-    with open(log_file, 'r') as f:
-        log_str = f.read()
-        log_sha = hashlib.sha1(log_str).hexdigest()
+    # There are some files that must always be sent.
+    always_fds = []
+    for key in FILES_TO_ALWAYS_UPLOAD:
+        if key in args.__dict__:
+            with open(getattr(args, key), 'r') as f:
+                always_str = f.read()
+                always_sha = hashlib.sha1(always_str).hexdigest()
 
-    log_fd = FileData('compilation_commands.json', log_sha, log_str)
+                always_fds.append(FileData(FILES_TO_ALWAYS_UPLOAD[key],
+                                           always_sha, always_str))
+        else:
+            # If the file is not given or does not exist
+            always_fds.append(FileData(FILES_TO_ALWAYS_UPLOAD[key],
+                                       "#REMOVE#", None))
 
     # -----------------------------------
     # We need to send ALL source files (if they are in the build.json,
@@ -116,7 +124,7 @@ def create_initial_file_data(log_file, actions, include_contents_for_all):
                                        head_str if include_contents_for_all
                                        else None))
 
-    return [log_fd] + source_fds + header_fds
+    return always_fds + source_fds + header_fds
 
 
 def create_file_data_from_paths(path_list):
@@ -134,7 +142,7 @@ def create_file_data_from_paths(path_list):
     return fds
 
 
-def __fix_compile_json(json, file_root):
+def _fix_compile_json(json, file_root):
     if 'CC_LOGGER_GCC_LIKE' not in os.environ:
         os.environ['CC_LOGGER_GCC_LIKE'] = 'gcc:g++:clang:clang++:cc:c++'
 
@@ -166,9 +174,22 @@ def __fix_compile_json(json, file_root):
     return json
 
 
+# The argument keys of 'CodeChecker check' which points to files existing
+# on the client's computer and must be transferred over the wire for remote
+# checking to properly take place.
+#
+# This dict associates configuration keys with remote filenames.
+FILES_TO_ALWAYS_UPLOAD = {'logfile': 'compilation_commands.json',
+                          'clangsa_args_cfg_file': 'sa-args',
+                          'tidy_args_cfg_file': 'tidy-args',
+                          'suppress': 'suppress',
+                          'skipfile': 'skipfile'
+                          }
+
 # The argument keys of 'CodeChecker check' which must be transferred over
 # the wire for remote checking to properly take place.
-# TODO: Suppress file, SAARGS and TIDYARGS handling!
+#
+# Keys specified in FILES_TO_ALWAYS_UPLOAD MUST NOT be specified here.
 CHECK_ARGS_TO_COMMUNICATE = ['analyzers',
                              'ordered_checkers'
                              ]
@@ -190,7 +211,7 @@ def pack_check_args(args):
 
 def unpack_check_args(args, args_json):
     """
-    Unpack the received client args json into a 'Namespace'-like dummy object
+    Unpack the received client args json into a Namespace object
     usable by the rest of CodeChecker.
     """
 
@@ -202,6 +223,18 @@ def unpack_check_args(args, args_json):
     for key in data.keys():
         if key in CHECK_ARGS_TO_COMMUNICATE and key not in args.__dict__:
             setattr(args, key, data[key])
+
+
+def unpack_check_fileargs(args, file_root):
+    """
+    Unpacks the FILES_TO_ALWAYS_UPLOAD keys into the given args Namespace
+    if the specified files exists in the file_root.
+    """
+
+    for argvar, filename in FILES_TO_ALWAYS_UPLOAD.iteritems():
+        if os.path.exists(os.path.join(file_root, filename)) and \
+                argvar not in args.__dict__:
+            setattr(args, argvar, os.path.join(file_root, filename))
 
 
 def handle_checking(run, context, callback=None, LOG=None):
@@ -219,7 +252,7 @@ def handle_checking(run, context, callback=None, LOG=None):
     with open(fixed_file, 'w') as outf:
         with open(run.args.logfile, 'r+') as inf:
             commands = json.load(inf)
-            commands = __fix_compile_json(commands, run.file_root)
+            commands = _fix_compile_json(commands, run.file_root)
             json.dump(commands, outf,
                       indent=(4 if LOG.level == logging.DEBUG
                               or LOG.level == logging.DEBUG_ANALYZER

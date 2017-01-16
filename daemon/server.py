@@ -67,10 +67,11 @@ class RemoteHandler(object):
                 is_remote_checking=True,
                 local_invocation=local_invocation,
 
-                # Field overrides due to remote context,
+                # Field overrides due to remote context.
                 name=run_name,
                 logfile=os.path.join(self.file_root,
-                                     "compilation_commands.json"),
+                                     daemon_lib.
+                                     FILES_TO_ALWAYS_UPLOAD['logfile']),
 
                 # TODO: Review these overrides!
                 add_compiler_defaults=False,
@@ -86,7 +87,6 @@ class RemoteHandler(object):
             return self.__persistent_hash
 
         def mark_running(self):
-            print("RUN MARKED RUNNING")
             self.__state = RemoteHandler.RunLock.RunStates.ANALYZERS_RUNNING
 
         def is_running(self):
@@ -95,7 +95,6 @@ class RemoteHandler(object):
 
         def mark_finished(self):
             if self.is_running():
-                print("RUN MARKED FINISHED!")
                 self.__state = RemoteHandler.RunLock.RunStates.DONE
 
     def pollCheckAvailability(self, run_name):
@@ -179,12 +178,18 @@ class RemoteHandler(object):
             if not os.path.exists(os.path.dirname(local_path)):
                 os.makedirs(os.path.dirname(local_path))
 
-            if fd.content is not None:
+            if fd.sha == "#REMOVE#":
+                # Some left-over files from a previous check (such as suppress
+                # or saargs) could be left over and the new client can command
+                # the server to force remove these files.
+                if os.path.exists(local_path):
+                    os.remove(local_path)
+            elif fd.content is not None:
                 # For files that have content, we extract them
                 # to the run-folder
                 with open(local_path, 'w') as f:
                     f.write(fd.content)
-            else:
+            elif fd.content is None:
                 # For files that don't have their content set, we check if the
                 # local version's hash (if exists) matches the client's hash
                 if not os.path.exists(local_path):
@@ -219,7 +224,9 @@ class RemoteHandler(object):
                 shared.ttypes.ErrorCode.GENERAL,
                 str("No run with the given token."))
 
+        daemon_lib.unpack_check_fileargs(run.args, run.file_root)
         run.mark_running()
+
         check_process = threading.Thread(
             target=daemon_lib.handle_checking,
             args=(

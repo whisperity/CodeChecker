@@ -233,7 +233,6 @@ def handle_daemon(args):
                                          is_server_started))
 
     server.start()
-    # TODO: Report server seems not to die...
 
     # Wait a bit.
     counter = 0
@@ -308,11 +307,25 @@ def handle_check(args):
     Based on the log runs the analysis.
     """
 
-    remote = args.remote_host or args.remote_port or args.remote_keepalive
+    remote = 'remote_host' in args or \
+             'remote_port' in args or \
+             'remote_keepalive' in args
     if remote:
+        # Set the default values here if the user did specify that we go
+        # remote, but didn't specify EVERY variable.
+
+        if not getattr(args, 'remote_host', None):
+            setattr(args, 'remote_host', 'localhost')
+        if not getattr(args, 'remote_port', None):
+            setattr(args, 'remote_port', 8002)
+            if not getattr(args, 'remote_keepalive', None):
+                setattr(args, 'remote_keepalive', False)
+
         LOG.info(''.join(['Using remote check at [',
                           args.remote_host or '',
                           ':', str(args.remote_port), ']']))
+        if args.remote_keepalive:
+            LOG.info('Command will wait until the server finishes analysing.')
 
     log_file = None
     try:
@@ -407,9 +420,10 @@ def handle_check(args):
             else:
                 LOG.debug("Generating file transport for all files.")
 
-            # Send the build.json, the source codes and the dependency
-            # metadata to the server.
-            initialfiles = daemon_lib.create_initial_file_data(log_file,
+            # Send the build.json, and other mandatory configuration files,
+            # the source codes and the dependency metadata to the server.
+            args.logfile = log_file
+            initialfiles = daemon_lib.create_initial_file_data(args,
                                                                actions,
                                                                ack.is_initial)
 
