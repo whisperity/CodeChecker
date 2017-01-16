@@ -47,6 +47,11 @@ class RemoteHandler(object):
         """A lock object that contains transient data associated with one
         particular remote checking execution."""
 
+        class RunStates:
+            INITIALISED = 1,
+            ANALYZERS_RUNNING = 2,
+            DONE = 3
+
         def __init__(self, workspace, run_name, local_invocation, args_json):
             self.workspace = workspace
             self.run_name = run_name
@@ -75,8 +80,35 @@ class RemoteHandler(object):
             )
             daemon_lib.unpack_check_args(self.args, args_json)
 
+            self.__state = RemoteHandler.RunLock.RunStates.INITIALISED
+
         def get_persistent_token(self):
             return self.__persistent_hash
+
+        def mark_running(self):
+            print("RUN MARKED RUNNING")
+            self.__state = RemoteHandler.RunLock.RunStates.ANALYZERS_RUNNING
+
+        def is_running(self):
+            return self.__state == RemoteHandler.RunLock.\
+                RunStates.ANALYZERS_RUNNING
+
+        def mark_finished(self):
+            if self.is_running():
+                print("RUN MARKED FINISHED!")
+                self.__state = RemoteHandler.RunLock.RunStates.DONE
+
+    def pollCheckAvailability(self, run_name):
+        """
+        Tells the client whether the server is able to create a remote
+        checking execution for the given run_name.
+        """
+
+        return not (run_name in self._running_checks and (
+            self._running_checks[run_name].is_running() or
+            (datetime.now() - self._running_checks[run_name]
+             .lock_created).total_seconds() <= 300
+        ))
 
     def initConnection(self, run_name, local_invocation, check_args):
         """
@@ -85,15 +117,13 @@ class RemoteHandler(object):
         """
 
         # Check whether the given run is locked.
-        if run_name in self._running_checks:
-            if (datetime.now() - self._running_checks[run_name]
-                    .lock_created).total_seconds() <= 5:
-                LOG.info("Refusing to do '" + run_name +
-                         "' as a run named like so is already being done!")
-                raise shared.ttypes.RequestFailed(
-                    shared.ttypes.ErrorCode.GENERAL,
-                    str("A run named '" + run_name +
-                        "' is already in progress."))
+        if not self.pollCheckAvailability(run_name):
+            LOG.info("Refusing to do '" + run_name +
+                     "' as a run named like so is already being done!")
+            raise shared.ttypes.RequestFailed(
+                shared.ttypes.ErrorCode.GENERAL,
+                str("A run named '" + run_name +
+                    "' is already in progress."))
 
         LOG.info("Beginning to handle new remote check request for '" +
                  run_name + "'")
@@ -188,6 +218,7 @@ class RemoteHandler(object):
                 shared.ttypes.ErrorCode.GENERAL,
                 str("No run with the given token."))
 
+        run.mark_running()
         check_process = multiprocessing.Process(
             target=daemon_lib.handle_checking,
             args=(

@@ -76,6 +76,11 @@ class RemoteClient(object):
 
     # ------------------------------------------------------------
     @ThriftClientCall
+    def pollCheckAvailability(self, run_name):
+        pass
+
+    # ------------------------------------------------------------
+    @ThriftClientCall
     def initConnection(self, run_name, check_args):
         pass
 

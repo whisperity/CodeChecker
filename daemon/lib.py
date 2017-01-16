@@ -236,7 +236,10 @@ def handle_checking(run, context, callback=None, LOG=None):
     actions = log_parser.parse_log(log_file,
                                    run.args.add_compiler_defaults)
 
-    analyzer.run_check(run.args, actions, context)
+    try:
+        analyzer.run_check(run.args, actions, context)
+    finally:
+        run.mark_finished()
 
     LOG.info("Analysis done!")
 

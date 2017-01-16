@@ -31,6 +31,11 @@ typedef list<FileData> FileList
 // calling into the server.
 service RemoteChecking {
 
+    // queries the server whether it is able to create a remote checking instance for the given run_name
+    // (this is False if, e.g. the server is already loaded with runs or the given run_name is locked)
+    bool pollCheckAvailability(
+                               1: string run_name),
+
     // call the remote server and notify that we wish to execute remote checking
     Acknowledgement initConnection(
                                    1: string run_name,

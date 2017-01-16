@@ -327,16 +327,19 @@ def handle_check(args):
 
             rclient = daemon_client.RemoteClient(args.remote_host,
                                                  args.remote_port)
-
             try:
-                ack = rclient.initConnection(args.name,
-                                             ' '.join(sys.argv),
-                                             daemon_lib.pack_check_args(args))
+                can_run = rclient.pollCheckAvailability(args.name)
             except Exception as e:
                 LOG.error(e.message)
                 LOG.error("Couldn't initiate remote checking on [{0}:{1}]"
                           .format(args.remote_host or 'localhost',
                                   args.remote_port))
+                sys.exit(1)
+
+            if not can_run:
+                LOG.error("Server did not accept the request to run '" +
+                          args.name + "'. It is either overloaded or a run " +
+                          "with the given name is already being executed.")
                 sys.exit(1)
 
         if not os.path.isdir(args.workspace):
@@ -387,6 +390,15 @@ def handle_check(args):
             # ---- Remote check mode ----
 
             LOG.debug("Logfile generation was successful in " + log_file)
+
+            try:
+                ack = rclient.initConnection(args.name,
+                                             ' '.join(sys.argv),
+                                             daemon_lib.pack_check_args(args))
+            except Exception as e:
+                LOG.error("Couldn't start uploading data to server: " +
+                          e.message)
+                sys.exit(1)
 
             if not ack.is_initial:
                 LOG.debug("Generating file transport for modified files "
