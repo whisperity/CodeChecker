@@ -11,10 +11,10 @@ from argparse import Namespace
 import datetime
 import errno
 import hashlib
-import multiprocessing
 import ntpath
 import os
 import time
+import threading
 import socket
 import sys
 
@@ -208,6 +208,7 @@ class RemoteHandler(object):
             LOG.debug('Check runner subprocess exited for run #{0} ({1}).'.
                       format(run_object.get_persistent_token(),
                              run_object.run_name))
+            run_object.mark_finished()
             del self._running_checks[run_object.run_name]
 
         run = self._get_run(token)
@@ -219,7 +220,7 @@ class RemoteHandler(object):
                 str("No run with the given token."))
 
         run.mark_running()
-        check_process = multiprocessing.Process(
+        check_process = threading.Thread(
             target=daemon_lib.handle_checking,
             args=(
                 run,

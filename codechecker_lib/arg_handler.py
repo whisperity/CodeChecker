@@ -233,6 +233,7 @@ def handle_daemon(args):
                                          is_server_started))
 
     server.start()
+    # TODO: Report server seems not to die...
 
     # Wait a bit.
     counter = 0
