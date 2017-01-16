@@ -220,8 +220,7 @@ def handle_daemon(args):
     is_server_started = multiprocessing.Event()
     server = multiprocessing.Process(target=daemon_server.run_server,
                                      args=(
-                                         args.host,
-                                         args.port,
+                                         args,
                                          db_connection_string,
                                          context,
                                          is_server_started))

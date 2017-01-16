@@ -191,7 +191,8 @@ FILES_TO_ALWAYS_UPLOAD = {'logfile': 'compilation_commands.json',
 #
 # Keys specified in FILES_TO_ALWAYS_UPLOAD MUST NOT be specified here.
 CHECK_ARGS_TO_COMMUNICATE = ['analyzers',
-                             'ordered_checkers'
+                             'ordered_checkers',
+                             'jobs'
                              ]
 
 

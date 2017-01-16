@@ -78,7 +78,6 @@ class RemoteHandler(object):
 
                 # TODO: Review these overrides!
                 add_compiler_defaults=False,
-                jobs=1,  # TODO: Let local invoker alter the number of jobs!
                 force=False,
                 keep_tmp=False
             )
@@ -106,11 +105,21 @@ class RemoteHandler(object):
         checking execution for the given run_name.
         """
 
-        return not (run_name in self._running_checks and (
-            self._running_checks[run_name].is_running() or
-            (datetime.now() - self._running_checks[run_name]
-             .lock_created).total_seconds() <= 300
-        ))
+        if len(self._running_checks) >= self.max_runs:
+            LOG.debug('Refused because {0} >= {1}, server is loaded.'
+                      .format(len(self._running_checks), self.max_runs))
+            return False
+
+        if run_name in self._running_checks:
+            if self._running_checks[run_name].is_running():
+                LOG.debug('Refused because the analysis is already running.')
+                return False
+            elif (datetime.now() - self._running_checks[run_name]
+                    .lock_created).total_seconds() <= 300:
+                LOG.debug('Refused because check inited in the past 5 min')
+                return False
+
+        return True
 
     def initConnection(self, run_name, local_invocation, check_args):
         """
@@ -134,6 +143,13 @@ class RemoteHandler(object):
                                             run_name,
                                             local_invocation,
                                             check_args)
+
+        if lock_object.args.jobs > self.max_jobs:
+            LOG.info("{0}: client requested {1} job threads, but server "
+                     "allows only {2}".format(run_name,
+                                              lock_object.args.jobs,
+                                              self.max_jobs))
+            lock_object.args.jobs = self.max_jobs
 
         first_connection_for_run = not os.path.exists(lock_object.file_root)
         if first_connection_for_run:
@@ -266,14 +282,18 @@ class RemoteHandler(object):
 
         return checker_records
 
-    def __init__(self, context, session):
+    def __init__(self, context, session, max_runs, max_jobs_per_run):
         self._running_checks = {}
         self.context = context
         self.workspace = context.codechecker_workspace
         self.session = session
+        self.max_runs = max_runs
+        self.max_jobs = max_jobs_per_run
 
 
-def run_server(host, port, db_uri, context, callback_event=None):
+def run_server(args, db_uri, context, callback_event=None):
+    host = args.host
+    port = args.port
     LOG.debug('Starting CodeChecker daemon ...')
 
     try:
@@ -291,7 +311,7 @@ def run_server(host, port, db_uri, context, callback_event=None):
     LOG.debug('Starting thrift server.')
     try:
         # Start thrift server.
-        handler = RemoteHandler(context, session)
+        handler = RemoteHandler(context, session, args.runs, args.jobs)
 
         processor = RemoteChecking.Processor(handler)
         transport = TSocket.TServerSocket(host=host, port=port)
@@ -303,8 +323,8 @@ def run_server(host, port, db_uri, context, callback_event=None):
                                            tfactory,
                                            pfactory,
                                            daemon=True)
-        # TODO: Cmdline argument to limit threads and jobs per thread
-        server.setNumThreads(15)  # TODO: Dev config --- please remove
+
+        server.setNumThreads(args.runs)
 
         LOG.info('Waiting for remote connections on [' +
                  (host if host else '') + ':' + str(port) + ']')

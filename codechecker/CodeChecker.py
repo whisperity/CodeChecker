@@ -506,6 +506,20 @@ Build command which is used to build the project.''')
                                    dest="host", default="localhost",
                                    required=False, help='Server address.')
 
+        daemon_parser.add_argument('-r', '--runs', type=int,
+                                   dest="runs", default=10,
+                                   required=False, help='The maximum number '
+                                                        'of runs that can be '
+                                                        'executed '
+                                                        'simultaneously.')
+
+        daemon_parser.add_argument('-j', '--jobs', type=int,
+                                   dest="jobs", default=1,
+                                   required=False, help='The maximum number '
+                                                        'of parallel analyzer'
+                                                        ' jobs PER RUN that '
+                                                        'can be executing.')
+
         add_database_arguments(daemon_parser)
         add_verbose_arguments(daemon_parser)
         daemon_parser.set_defaults(func=arg_handler.handle_daemon)
