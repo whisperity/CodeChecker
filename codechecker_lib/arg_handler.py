@@ -307,7 +307,7 @@ def handle_check(args):
     Based on the log runs the analysis.
     """
 
-    remote = args.remote_host or args.remote_port
+    remote = args.remote_host or args.remote_port or args.remote_keepalive
     if remote:
         LOG.info(''.join(['Using remote check at [',
                           args.remote_host or '',

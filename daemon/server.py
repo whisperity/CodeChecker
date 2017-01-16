@@ -192,7 +192,7 @@ class RemoteHandler(object):
             args=(
                 run,
                 self.context,
-                _end_check_callback(self, run),
+                lambda: _end_check_callback(self, run),
                 LOG))
 
         check_process.start()

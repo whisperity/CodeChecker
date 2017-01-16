@@ -215,8 +215,6 @@ def handle_checking(run, context, callback=None, LOG=None):
                               os.path.basename(run.args.logfile).
                               replace('.json', '.fixed.json'))
 
-    print(LOG.__str__())
-    print(LOG.__dict__)
     LOG.debug("Saving fixed log file to " + fixed_file)
     with open(fixed_file, 'w') as outf:
         with open(run.args.logfile, 'r+') as inf:
