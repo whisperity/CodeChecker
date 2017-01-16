@@ -318,8 +318,8 @@ def handle_check(args):
             setattr(args, 'remote_host', 'localhost')
         if not getattr(args, 'remote_port', None):
             setattr(args, 'remote_port', 8002)
-            if not getattr(args, 'remote_keepalive', None):
-                setattr(args, 'remote_keepalive', False)
+        if not getattr(args, 'remote_keepalive', None):
+            setattr(args, 'remote_keepalive', False)
 
         LOG.info(''.join(['Using remote check at [',
                           args.remote_host or '',
