@@ -7,6 +7,7 @@
 from __future__ import print_function
 from __future__ import unicode_literals
 
+from argparse import Namespace
 import datetime
 import errno
 import hashlib
@@ -27,14 +28,11 @@ from thrift.transport import TSocket
 from thrift.transport import TTransport
 
 from codechecker_lib import database_handler
-from codechecker_lib import decorators
-from codechecker_lib import logger
 from codechecker_lib.logger import LoggerFactory
+from codechecker_lib import util
 from db_model.orm_model import *
 
 from . import lib as daemon_lib
-
-from codechecker_lib.profiler import profileit
 
 LOG = LoggerFactory.get_new_logger('CC DAEMON')
 
@@ -45,46 +43,97 @@ class RemoteHandler(object):
     perform checking on this remote, daemon machine.
     """
 
-    def _generate_folder(self, run_name):
-        return os.path.join(self.workspace, run_name)
+    class RunLock(object):
+        """A lock object that contains transient data associated with one
+        particular remote checking execution."""
 
-    def initConnection(self, run_name, check_args):
+        def __init__(self, workspace, run_name, local_invocation, args_json):
+            self.workspace = workspace
+            self.run_name = run_name
+            self.file_root = os.path.join(self.workspace, run_name)
+            self.lock_created = datetime.now()
+            self.__persistent_hash = util.get_hash([workspace,
+                                                    run_name,
+                                                    self.lock_created])[0:8]
+
+            self.args = Namespace(
+                # Mandatory field for indicating that the checking does
+                # NOT take place on a local machine!
+                is_remote_checking=True,
+                local_invocation=local_invocation,
+
+                # Field overrides due to remote context,
+                name=run_name,
+                logfile=os.path.join(self.file_root,
+                                     "compilation_commands.json"),
+
+                # TODO: Review these overrides!
+                add_compiler_defaults=False,
+                jobs=1,  # TODO: Let local invoker alter the number of jobs!
+                force=False,
+                keep_tmp=False
+            )
+            daemon_lib.unpack_check_args(self.args, args_json)
+
+        def get_persistent_token(self):
+            return self.__persistent_hash
+
+    def initConnection(self, run_name, local_invocation, check_args):
         """
         Sets up a remote checking's environment on the server based on a
         client's request.
         """
 
-        if run_name in self._runningChecks:
-            if (datetime.now() - self._runningChecks[run_name]['timestamp'])\
-                    .total_seconds() <= 5:
-                LOG.info("Refusing to do '" + run_name + "' as a run named like so is already being done!")
+        # Check whether the given run is locked.
+        if run_name in self._running_checks:
+            if (datetime.now() - self._running_checks[run_name]
+                    .lock_created).total_seconds() <= 5:
+                LOG.info("Refusing to do '" + run_name +
+                         "' as a run named like so is already being done!")
                 raise shared.ttypes.RequestFailed(
                     shared.ttypes.ErrorCode.GENERAL,
-                    str("A run named '" + run_name + "' is already in progress."))
+                    str("A run named '" + run_name +
+                        "' is already in progress."))
 
         LOG.info("Beginning to handle new remote check request for '" +
                  run_name + "'")
-        self._runningChecks[run_name] = {'timestamp': datetime.now(),
-                                         'argsjson': check_args}
 
-        # Check if the workspace folder for this run exists
-        folder = self._generate_folder(run_name)
-        if not os.path.exists(folder):
-            LOG.debug("Creating run folder at " + folder)
-            os.mkdir(folder)
+        lock_object = RemoteHandler.RunLock(self.workspace,
+                                            run_name,
+                                            local_invocation,
+                                            check_args)
 
-        return True
+        first_connection_for_run = not os.path.exists(lock_object.file_root)
+        if first_connection_for_run:
+            LOG.debug("Creating run folder at " + lock_object.file_root)
+            os.mkdir(lock_object.file_root)
 
-    def sendFileData(self, run_name, files):
+        self._running_checks[run_name] = lock_object
+
+        return Acknowledgement(lock_object.get_persistent_token(),
+                               first_connection_for_run)
+
+    def _get_run(self, token):
+        """Returns if a current run for the given unique token."""
+        return next((lobj for lobj in self._running_checks.values()
+                     if lobj.get_persistent_token() == token), None)
+
+    def sendFileData(self, token, files):
         """
         Receives a list of files and metadata from
         the client for a given connection.
         """
-        if run_name not in self._runningChecks:
-            return
-        folder = self._generate_folder(run_name)
 
-        LOG.info("Received " + str(len(files)) + " file data for run '" + run_name + "'")
+        run = self._get_run(token)
+        if not run:
+            LOG.error("Received file data for run #" + token + " but such"
+                      " run does not exist!")
+            raise shared.ttypes.RequestFailed(
+                shared.ttypes.ErrorCode.GENERAL,
+                str("No run with the given token."))
+
+        LOG.info("Received " + str(len(files)) +
+                 " file data for run '" + run.run_name + "'")
 
         files_need_send = []
         for fd in files:
@@ -94,7 +143,7 @@ class RemoteHandler(object):
             if os.path.isabs(client_path):
                 # TODO: This won't work under Windows!
                 client_path = client_path.lstrip('/')
-            local_path = os.path.join(folder, client_path)
+            local_path = os.path.join(run.file_root, client_path)
 
             # We also need to check if the proper directory structure exists
             if not os.path.exists(os.path.dirname(local_path)):
@@ -114,46 +163,51 @@ class RemoteHandler(object):
                         sha = hashlib.sha1(f.read()).hexdigest()
                         if sha != fd.sha:
                             LOG.debug("File '" + fd.path + "' SHA mismatch.\n"
-                                "\tClient: " + fd.sha +
-                                "\tServer: " + sha)
+                                      "\tClient: " + fd.sha +
+                                      "\tServer: " + sha)
 
                             files_need_send.append(fd.path)
 
         return files_need_send
 
-    def beginChecking(self, run_name, disconnect_immediately):
-        """"""
+    def beginChecking(self, token, disconnect_immediately):
+        """Starts the checking on the daemon host."""
 
-        def __end_check_callback(self):
-            print('Check runner subprocess exited.')
-            LOG.info('Check runner subprocess exited.')
-            del self._runningChecks[run_name]
-            print(self._runningChecks)
+        def _end_check_callback(self, run_object):
+            LOG.debug('Check runner subprocess exited for run #{0} ({1}).'.
+                      format(run_object.get_persistent_token(),
+                             run_object.run_name))
+            del self._running_checks[run_object.run_name]
 
-        print(self._runningChecks)
+        run = self._get_run(token)
+        if not run:
+            LOG.error("Client commanded to start run #" + token + " but such"
+                      " run does not exist!")
+            raise shared.ttypes.RequestFailed(
+                shared.ttypes.ErrorCode.GENERAL,
+                str("No run with the given token."))
 
-        check_process = multiprocessing.Process(target=daemon_lib.handle_checking,
-                                                args=(
-                                                    run_name,
-                                                    self._generate_folder(run_name),
-                                                    self._runningChecks[run_name],
-                                                    self.context,
-                                                    __end_check_callback(self),
-                                                    LOG))
+        check_process = multiprocessing.Process(
+            target=daemon_lib.handle_checking,
+            args=(
+                run,
+                self.context,
+                _end_check_callback(self, run),
+                LOG))
 
-        LOG.info('Starting check in a sub-process...')
         check_process.start()
 
         if not disconnect_immediately:
-            # If the user wants to wait for the checking to finish, then we shall wait
-            LOG.debug('Check running. Keeping connection alive until check is over...')
+            # If the user wants to wait for the checking to finish,
+            # then we shall wait
+            LOG.debug('Check running. Keeping connection alive '
+                      'until check is over...')
             check_process.join()
         else:
             LOG.debug('User did not request keep-alive. Goodbye!')
 
-
     def __init__(self, context, session):
-        self._runningChecks = {}
+        self._running_checks = {}
         self.context = context
         self.workspace = context.codechecker_workspace
         self.session = session
@@ -189,6 +243,7 @@ def run_server(host, port, db_uri, context, callback_event=None):
                                            tfactory,
                                            pfactory,
                                            daemon=True)
+        # TODO: Cmdline argument to limit threads and jobs per thread
         server.setNumThreads(15)  # TODO: Dev config --- please remove
 
         LOG.info('Waiting for remote connections on [' +

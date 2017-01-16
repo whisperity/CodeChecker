@@ -99,26 +99,30 @@ def get_env_var(env_var, needed=False):
 
 
 # -------------------------------------------------------------------------
-def get_tmp_dir_hash():
-    """Generate a hash based on the current time and process id."""
+def get_hash(salttokens=[]):
+    """
+    Create a random hash using the given list as salt tokens and the
+    current time, username and process-ID.
+    """
 
+    usr = getpass.getuser()
     pid = os.getpid()
     time = datetime.datetime.now()
 
-    data = str(pid) + str(time)
+    dir_hash = hashlib.sha256('@'.join(
+        map(str, salttokens + [usr, pid, time])
+    )).hexdigest()
 
-    dir_hash = hashlib.md5()
-    dir_hash.update(data)
+    LOG.debug('Generated a temporary hash "%s".'
+              % dir_hash)
 
-    LOG.debug('The generated temporary directory hash is %s.'
-              % dir_hash.hexdigest())
-
-    return dir_hash.hexdigest()
+    return dir_hash
 
 
 # -------------------------------------------------------------------------
 def get_file_name_from_path(path):
     """Get the filename from a path."""
+
     head, tail = ntpath.split(path)
     return head, tail
 
@@ -197,15 +201,18 @@ def get_default_workspace():
     """
     Default workspace in the user's home directory.
     """
+
     workspace = os.path.join(os.path.expanduser("~"), '.codechecker')
     return workspace
 
 
 def get_temporary_workspace():
     """
-    Temporary workspace in the temporary folder for the user.
+    Temporary workspace in the system temporary folder for the current user.
+    This is generated with an extra random alphanumeric suffix.
     """
+
     workspace = os.path.join(tempfile.gettempdir(), "ccws_" +
                              getpass.getuser() + "." +
-                             get_tmp_dir_hash()[0:6])
+                             get_hash()[0:8])
     return workspace

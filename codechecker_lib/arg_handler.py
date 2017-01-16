@@ -205,7 +205,7 @@ def handle_daemon(args):
                                            context.ld_lib_path_extra)
 
     sql_server = SQLServer.from_cmdline_args(args,
-                                             context. \
+                                             context.
                                              codechecker_workspace,
                                              context.migration_root,
                                              check_env)
@@ -323,14 +323,15 @@ def handle_check(args):
         # In remote mode, connect to the remote daemon
         # and use a temporary workspace
         if remote:
-            args.local_invocation = ' '.join(sys.argv)
             args.workspace = os.path.realpath(util.get_temporary_workspace())
 
             rclient = daemon_client.RemoteClient(args.remote_host,
                                                  args.remote_port)
 
             try:
-                rclient.initConnection(args.name, daemon_lib.pack_check_args(args))
+                ack = rclient.initConnection(args.name,
+                                             ' '.join(sys.argv),
+                                             daemon_lib.pack_check_args(args))
             except Exception as e:
                 LOG.error(e.message)
                 LOG.error("Couldn't initiate remote checking on [{0}:{1}]"
@@ -386,26 +387,32 @@ def handle_check(args):
             # ---- Remote check mode ----
 
             LOG.debug("Logfile generation was successful in " + log_file)
-            LOG.debug("Generating initial transport...")
+
+            if not ack.is_initial:
+                LOG.debug("Generating file transport for modified files "
+                          "and metadata")
+            else:
+                LOG.debug("Generating file transport for all files.")
 
             # Send the build.json, the source codes and the dependency
             # metadata to the server.
             initialfiles = daemon_lib.create_initial_file_data(log_file,
-                                                               actions)
+                                                               actions,
+                                                               ack.is_initial)
 
-            LOG.debug("Sending initial transport to server...")
-            wrongfiles = rclient.sendFileData(args.name, initialfiles)
+            LOG.debug("Sending files to server...")
+            wrongfiles = rclient.sendFileData(ack.token, initialfiles)
 
             while len(wrongfiles) != 0:
                 LOG.debug(str(len(wrongfiles)) +
-                          " files reported by server as required.")
+                          " more files reported by server as required.")
                 fds = daemon_lib.create_file_data_from_paths(wrongfiles)
-                wrongfiles = rclient.sendFileData(args.name, fds)
+                wrongfiles = rclient.sendFileData(ack.token, fds)
 
-            LOG.info('Required files successfully uploaded to remote server.')
+            LOG.info('All files successfully uploaded to remote server.')
 
             # Tell the server that we have sent everything
-            rclient.beginChecking(args.name, not args.remote_keepalive)
+            rclient.beginChecking(ack.token, not args.remote_keepalive)
 
             if args.remote_keepalive:
                 LOG.info('Server reported the analysis to be over.')
@@ -420,11 +427,8 @@ def handle_check(args):
                 LOG.debug('Removing temporary log file: ' + log_file)
                 os.remove(log_file)
 
-            if remote:
-                try:
-                    shutil.rmtree(args.workspace)
-                except:
-                    pass
+            if remote and os.path.exists(args.workspace):
+                shutil.rmtree(args.workspace)
 
 
 def _do_quickcheck(args):

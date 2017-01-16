@@ -8,6 +8,15 @@ include "shared.thrift"
 
 namespace py daemonServer
 
+typedef list<string> PathList
+
+//-----------------------------------------------------------------------------
+struct Acknowledgement {
+    1: string token,                // the remote check connection's unique token
+    2: bool   is_initial            // true if the initated connection is initial - the server has no data
+                                    // stored for run the check has been initiated for
+}
+
 //-----------------------------------------------------------------------------
 struct FileData {
     1: string path,                 // the full path of the file
@@ -16,7 +25,6 @@ struct FileData {
 }
 typedef list<FileData> FileList
 
-typedef list<string> PathList
 
 //-----------------------------------------------------------------------------
 // The order of the functions indicates the order that must be maintained when
@@ -24,20 +32,23 @@ typedef list<string> PathList
 service RemoteChecking {
 
     // call the remote server and notify that we wish to execute remote checking
-    bool initConnection(
-                        1: string run_name,
-                        2: string check_args)
-                        throws (1: shared.RequestFailed requestError),
+    Acknowledgement initConnection(
+                                   1: string run_name,
+                                   2: string local_invocation,
+                                   3: string check_args)
+                                   throws (1: shared.RequestFailed requestError),
 
     // sends a list of files to the server to notify the server about the state of files on the client machine
     // the return value indicates a list of files that the server reported as non-matching the local hash
     PathList sendFileData(
-                          1: string   run_name
+                          1: string   token
                           2: FileList files)
+                          throws (1: shared.RequestFailed requestError),
 
     // after the client is sure that it fulfilled the server's request on every needed file,
     // this method begins to run the check on the server
     void beginChecking(
-                       1: string run_name,
+                       1: string token,
                        2: bool   disconnect_immediately)
+                       throws (1: shared.RequestFailed requestError)
 }

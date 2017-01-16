@@ -28,6 +28,7 @@ class RemoteClient(object):
     def __init__(self, host, port):
         self.__host = host
         self.__port = int(port)
+
         self.socket = TSocket.TSocket(host, port)
         self.transport = TTransport.TBufferedTransport(self.socket)
         self.protocol = TBinaryProtocol.TBinaryProtocol(self.transport)
@@ -80,10 +81,10 @@ class RemoteClient(object):
 
     # ------------------------------------------------------------
     @ThriftClientCall
-    def sendFileData(self, run_name, files):
+    def sendFileData(self, token, files):
         pass
 
     # ------------------------------------------------------------
     @ThriftClientCall
-    def beginChecking(self, run_name, disconnect_immediately):
+    def beginChecking(self, token, disconnect_immediately):
         pass

@@ -9,19 +9,18 @@ with a particular CodeChecker server.
 """
 
 import getpass
-import hashlib
 import json
 import os
 import portalocker
 import stat
 import shutil
-import time
 import tempfile
 import uuid
 
 from datetime import datetime
 
 from codechecker_lib.logger import LoggerFactory
+from codechecker_lib import util
 
 unsupported_methods = []
 
@@ -47,9 +46,7 @@ class _Session():
 
     # Create an initial salt from system environment for use with the session
     # permanent persistency routine.
-    __initial_salt = hashlib.sha256(SESSION_COOKIE_NAME + "__" +
-                                    str(time.time()) + "__" +
-                                    os.urandom(16)).hexdigest()
+    __initial_salt = util.get_hash([SESSION_COOKIE_NAME, '_', os.urandom(16)])
 
     @staticmethod
     def calc_persistency_hash(client_addr, auth_string):
@@ -57,8 +54,8 @@ class _Session():
         persistency hash is intended to be used for the "session recycle"
         feature to prevent NAT endpoints from accidentally getting each
         other's session."""
-        return hashlib.sha256(auth_string + "@" + client_addr + ":" +
-                              _Session.__initial_salt).hexdigest()
+        return util.get_hash([auth_string, '@', client_addr, ':',
+                              _Session.__initial_salt])
 
     def __init__(self, client_addr, token, phash):
         self.client = client_addr

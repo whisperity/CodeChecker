@@ -6,21 +6,20 @@
 
 import hashlib
 import json
+import logging
 import os
 import sys
 
 from codechecker_lib import analyzer
-from codechecker_lib import build_action
 from codechecker_lib import build_manager
 from codechecker_lib import log_parser
 from codechecker_lib import util
 
-from codechecker_gen.daemonServer import RemoteChecking
 from codechecker_gen.daemonServer.ttypes import *
 import shared
 
 
-def __create_dependencies(action):
+def _create_dependencies(action):
     """
     Transforms the given original build 'command' to a command that, when
     executed, is able to generate a dependency list.
@@ -31,7 +30,7 @@ def __create_dependencies(action):
 
     if command[0] in os.environ['CC_LOGGER_GCC_LIKE'].split(':'):
         # gcc and clang can generate makefile-style dependency list
-        command[0] = command[0] + ' -E -M -MQ"__dummy"'
+        command[0] += ' -E -M -MQ"__dummy"'
 
         try:
             option_index = command.index('-o')
@@ -69,7 +68,7 @@ def __create_dependencies(action):
                         command)
 
 
-def create_initial_file_data(log_file, actions):
+def create_initial_file_data(log_file, actions, include_contents_for_all):
     """
     Transforms the given BuildAction list to generate a list
     of FileData that needs to be sent to the remote server.
@@ -91,7 +90,7 @@ def create_initial_file_data(log_file, actions):
     header_files = set()
     for action in actions:
         source_files = source_files.union(action.sources)
-        header_files = header_files.union(__create_dependencies(action))
+        header_files = header_files.union(_create_dependencies(action))
 
     source_fds = []
     for f in source_files:
@@ -110,8 +109,12 @@ def create_initial_file_data(log_file, actions):
 
         # (Ensure no source file dependency is marked as a header!)
         with open(f, 'r') as df:
-            head_sha = hashlib.sha1(df.read()).hexdigest()
-            header_fds.append(FileData(f, head_sha, None))
+            head_str = df.read()
+            head_sha = hashlib.sha1(head_str).hexdigest()
+            header_fds.append(FileData(f,
+                                       head_sha,
+                                       head_str if include_contents_for_all
+                                       else None))
 
     return [log_fd] + source_fds + header_fds
 
@@ -124,9 +127,9 @@ def create_file_data_from_paths(path_list):
     fds = []
     for f in path_list:
         with open(f, 'r') as sf:
-            source_str = sf.read()
-            source_sha = hashlib.sha1(source_str).hexdigest()
-            fds.append(FileData(f, source_sha, source_str))
+            file_str = sf.read()
+            file_sha = hashlib.sha1(file_str).hexdigest()
+            fds.append(FileData(f, file_sha, file_str))
 
     return fds
 
@@ -163,28 +166,18 @@ def __fix_compile_json(json, file_root):
     return json
 
 
-class __DummyArgs(object):
-    """
-    Mock to simulate a dot-accessible args object.
-    (via http://stackoverflow.com/a/652417/1428773)
-    """
-
-    def __init__(self, **kwargs):
-        self.__dict__.update(kwargs)
-
-
-CHECK_ARGS_TO_COMMUNICATE = ['local_invocation',
-                             'analyzers',
-                             'saargs',
-                             'tidyargs',
+# The argument keys of 'CodeChecker check' which must be transferred over
+# the wire for remote checking to properly take place.
+# TODO: Suppress file, SAARGS and TIDYARGS handling!
+CHECK_ARGS_TO_COMMUNICATE = ['analyzers',
                              'ordered_checkers'
                              ]
 
 
 def pack_check_args(args):
     """
-    Filters the original (clientside) check invocation arguments and packs them into a json string to send to
-    the daemon.
+    Filters the original (clientside) check invocation arguments and packs
+    them into a json string to send to the daemon.
     """
 
     data = {}
@@ -197,70 +190,55 @@ def pack_check_args(args):
 
 def unpack_check_args(args, args_json):
     """
-    Unpack the received client args json into a 'Namespace'-like dummy object usable by the rest of CodeChecker.
+    Unpack the received client args json into a 'Namespace'-like dummy object
+    usable by the rest of CodeChecker.
     """
 
     data = json.loads(args_json)
     if type(data) is not dict:
-        raise ValueError("The checking configuration sent over the wire must be a JSON-encoded dictionary.")
+        raise ValueError("The checking configuration sent over the wire "
+                         "must be a JSON-encoded dictionary.")
 
     for key in data.keys():
         if key in CHECK_ARGS_TO_COMMUNICATE and key not in args.__dict__:
-            args.__dict__[key] = data[key]
+            setattr(args, key, data[key])
 
 
-
-def handle_checking(run_name, file_root, session_data, context, callback=None, LOG=None):
-    args = __DummyArgs(
-        # Mandatory field for indicating that the checking does NOT take place on a local machine!
-        is_remote_checking=True,
-
-        # Field overrides due to remote context,
-        name=run_name,
-        logfile=os.path.join(file_root, "compilation_commands.json"),
-
-        # TODO: Review these overrides!
-        add_compiler_defaults=False,
-        jobs=1,
-        force=False,
-        keep_tmp=False
-    )
-
-    unpack_check_args(args, session_data['argsjson'])
-
-    # Before the log-file parsing can continue, we must first "hackfix" the log
-    # file so that it uses the paths under file_root, not the paths on the
-    # client's computer.
+def handle_checking(run, context, callback=None, LOG=None):
+    # Before the log-file parsing can continue, we must first "hackfix" the
+    # log file so that it uses the paths under file_root, not the paths on
+    # the client's computer.
     #
     # TODO: HACK: This is a HACKFIX.
     # TODO:       Later please implement a much more useful support for this!
-    fixed_file = os.path.join(os.path.dirname(args.logfile),
-                              os.path.basename(args.logfile).
-                                replace('.json', '.fixed.json'))
+    fixed_file = os.path.join(os.path.dirname(run.args.logfile),
+                              os.path.basename(run.args.logfile).
+                              replace('.json', '.fixed.json'))
 
+    print(LOG.__str__())
+    print(LOG.__dict__)
     LOG.debug("Saving fixed log file to " + fixed_file)
     with open(fixed_file, 'w') as outf:
-        with open(args.logfile, 'r') as inf:
+        with open(run.args.logfile, 'r+') as inf:
             commands = json.load(inf)
-            commands = __fix_compile_json(commands, file_root)
-            json.dump(commands, outf, indent=4)
+            commands = __fix_compile_json(commands, run.file_root)
+            json.dump(commands, outf,
+                      indent=(4 if LOG.level == logging.DEBUG
+                              or LOG.level == logging.DEBUG_ANALYZER
+                              else None))
 
-    args.logfile = fixed_file
+    run.args.logfile = fixed_file
 
-    log_file = build_manager.check_log_file(args, context)
+    log_file = build_manager.check_log_file(run.args, context)
     if not log_file:
         LOG.error("Failed to generate compilation command file: " +
                   log_file)
         sys.exit(1)
 
     actions = log_parser.parse_log(log_file,
-                                   args.add_compiler_defaults)
+                                   run.args.add_compiler_defaults)
 
-    #for action in actions:
-    #    LOG.info("--------------------------------------------------------")
-    #    LOG.info(action.__str__())
-
-    analyzer.run_check(args, actions, context)
+    analyzer.run_check(run.args, actions, context)
 
     LOG.info("Analysis done!")
 
