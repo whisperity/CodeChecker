@@ -363,7 +363,7 @@ def handle_check(args):
                                                    context.ld_lib_path_extra)
 
             sql_server = SQLServer.from_cmdline_args(args,
-                                                     context.\
+                                                     context.
                                                      codechecker_workspace,
                                                      context.migration_root,
                                                      check_env)

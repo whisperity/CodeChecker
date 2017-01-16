@@ -140,7 +140,7 @@ def __fix_compile_json(json, file_root):
 
     for command in json:
         new_directory = os.path.join(file_root,
-                                    command['directory'].lstrip('/'))
+                                     command['directory'].lstrip('/'))
 
         # Fix source and target file paths in the command itself
         command['command'] = command['command'].replace(command['directory'],

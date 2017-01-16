@@ -150,7 +150,8 @@ class RemoteHandler(object):
                 os.makedirs(os.path.dirname(local_path))
 
             if fd.content is not None:
-                # For files that have content, we extract them to the run-folder
+                # For files that have content, we extract them
+                # to the run-folder
                 with open(local_path, 'w') as f:
                     f.write(fd.content)
             else:
