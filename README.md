@@ -32,6 +32,8 @@ Main features
     or via annotation in source code, along with exclusion of entire source
     paths from analysis
   * `quickcheck` mode shows analysis results on standard output
+  * [Daemon mode](docs/daemon.md): Install _CodeChecker_ on your team's server
+    and run analyses without loading your developer computer.
   * Easily implementable [Thrift](http://thrift.apache.org)-based
     server-client communication used for storing and querying of discovered
     defects
@@ -218,3 +220,4 @@ Additional documentation
   * [Database schema migration](docs/db_schema_guide.md)
   * [Usage of PostgreSQL database](docs/postgresql_setup.md)
   * [Requiring credentials to view analysis results](docs/authentication.md)
+  * [Running CodeChecker as a service daemon](docs/daemon.md)
