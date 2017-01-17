@@ -11,6 +11,7 @@ import json
 import multiprocessing
 import os
 import psutil
+import socket
 import shutil
 import sys
 import tempfile
@@ -57,6 +58,12 @@ def handle_list_checkers(args):
     List the supported checkers by the analyzers.
     List the default enabled and disabled checkers in the config.
     """
+    context = generic_package_context.get_context()
+    # If nothing is set, list checkers for all supported analyzers.
+    enabled_analyzers = args.analyzers or analyzer_types.supported_analyzers
+    analyzer_environment = analyzer_env.get_check_env(
+        context.path_env_extra,
+        context.ld_lib_path_extra)
 
     remote = 'remote_host' in args or \
              'remote_port' in args
@@ -109,9 +116,25 @@ def handle_server(args):
         sys.exit(2)
 
     if args.list:
-        rows = [('Workspace', 'View port')]
-        for instance in instance_manager.list('server'):
-            rows.append((instance['workspace'], str(instance['port'])))
+        instances = instance_manager.list('server')
+
+        instances_on_multiple_hosts = any(True for inst in instances
+                                          if inst['hostname'] !=
+                                          socket.gethostname())
+        if not instances_on_multiple_hosts:
+            rows = [('Workspace', 'View port')]
+        else:
+            rows = [('Workspace', 'Computer host', 'View port')]
+
+        for instance in instance_manager.list():
+            if not instances_on_multiple_hosts:
+                rows.append((instance['workspace'], str(instance['port'])))
+            else:
+                rows.append((instance['workspace'],
+                             instance['hostname']
+                             if instance['hostname'] != socket.gethostname()
+                             else '',
+                             str(instance['port'])))
 
         print("Your running CodeChecker servers:")
         util.print_table(rows)
@@ -120,9 +143,10 @@ def handle_server(args):
         for i in instance_manager.list('server'):
             # A STOP only stops the server associated with the given workspace
             # and view-port.
-            if args.stop and not (i['port'] == args.view_port and
-               os.path.abspath(i['workspace']) ==
-               os.path.abspath(workspace)):
+            if i['hostname'] != socket.gethostname() or (
+                        args.stop and not (i['port'] == args.view_port and
+                                           os.path.abspath(i['workspace']) ==
+                                           os.path.abspath(workspace))):
                 continue
 
             try:
