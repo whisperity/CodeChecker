@@ -80,6 +80,6 @@ def preface_skip_file(skip_file, new_root, fixed_file):
         for line in skip_file_content:
             if len(line) >= 2 and line[0] in ['-', '+']:
                 path = line[0] + new_root + \
-                       ('/' if line[1] != '/' else '') + line[1:]
+                    ('/' if line[1] != '/' else '') + line[1:]
 
                 fixed_file.write(path + '\n')

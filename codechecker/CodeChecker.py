@@ -540,6 +540,26 @@ Build command which is used to build the project.''')
                                                         ' jobs PER RUN that '
                                                         'can be executing.')
 
+        daemon_parser.add_argument('-l', '--list',
+                                   action='store_true',
+                                   dest="list",
+                                   required=False,
+                                   help='List daemons started by your user.')
+
+        daemon_parser.add_argument('-s', '--stop',
+                                   action='store_true',
+                                   dest="stop",
+                                   required=False,
+                                   help='Stops the daemon associated with '
+                                        'the given view-port and workspace.')
+
+        daemon_parser.add_argument('--stop-all',
+                                   action='store_true',
+                                   dest="stop_all",
+                                   required=False,
+                                   help='Stops all of your running '
+                                        'CodeChecker daemons.')
+
         add_database_arguments(daemon_parser)
         add_verbose_arguments(daemon_parser)
         daemon_parser.set_defaults(func=arg_handler.handle_daemon)

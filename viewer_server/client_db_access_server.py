@@ -342,7 +342,8 @@ def start_server(package_data, port, db_conn_string, suppress_handler,
                                      context.db_version_info,
                                      session_manager.SessionManager())
 
-    instance_manager.register(os.getpid(),
+    instance_manager.register('server',
+                              os.getpid(),
                               os.path.abspath(context.codechecker_workspace),
                               port)
 

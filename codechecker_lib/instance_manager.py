@@ -71,12 +71,13 @@ def __rewriteInstanceFile(append, removePids):
         portalocker.unlock(f)
 
 
-def register(pid, workspace, port):
+def register(kind, pid, workspace, port):
     """
     Adds the specified CodeChecker server instance to the user's instance
     descriptor.
     """
-    __rewriteInstanceFile([{"pid": pid,
+    __rewriteInstanceFile([{"kind": kind,
+                            "pid": pid,
                             "workspace": workspace,
                             "port": port}],
                           [])
@@ -90,7 +91,7 @@ def unregister(pid):
     __rewriteInstanceFile([], [pid])
 
 
-def list():
+def list(kind=None):
     """Returns the list of running servers for the current user."""
 
     # This method does NOT write the descriptor file.
@@ -100,7 +101,13 @@ def list():
     if os.path.exists(descriptor):
         with open(descriptor, 'r') as f:
             portalocker.lock(f, portalocker.LOCK_SH)
-            instances = [i for i in json.load(f) if __checkInstance(i['pid'])]
+            instances = [i for i in json.load(f) if __checkInstance(i['pid'])
+                         and (
+                             (kind is not None and i['kind'] == kind)
+                             or
+                             kind is None
+                         )
+                         ]
             portalocker.unlock(f)
 
     return instances

@@ -216,7 +216,7 @@ def get_temporary_workspace():
     This is generated with an extra random alphanumeric suffix.
     """
 
-	workspace = os.path.join(tempfile.gettempdir(), "ccws_" +
+    workspace = os.path.join(tempfile.gettempdir(), "ccws_" +
                              getpass.getuser() + "." +
                              get_hash()[0:8])
     return workspace

@@ -8,6 +8,7 @@ from __future__ import print_function
 from __future__ import unicode_literals
 
 from argparse import Namespace
+import atexit
 import datetime
 import errno
 import hashlib
@@ -32,6 +33,7 @@ from codechecker_lib.analyzers import analyzer_types
 from codechecker_lib import database_handler
 from codechecker_lib import generic_package_context
 from codechecker_lib.logger import LoggerFactory
+from codechecker_lib import instance_manager
 from codechecker_lib import util
 from db_model.orm_model import *
 
@@ -328,8 +330,16 @@ def run_server(args, db_uri, context, callback_event=None):
 
         server.setNumThreads(args.runs)
 
+        instance_manager.register('daemon',
+                                  os.getpid(),
+                                  os.path.abspath(
+                                      context.codechecker_workspace),
+                                  port)
+
         LOG.info('Waiting for remote connections on [' +
                  (host if host else '') + ':' + str(port) + ']')
+
+        atexit.register(instance_manager.unregister, os.getpid())
 
         if callback_event:
             callback_event.set()
