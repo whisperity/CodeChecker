@@ -126,7 +126,7 @@ def handle_server(args):
         else:
             rows = [('Workspace', 'Computer host', 'View port')]
 
-        for instance in instance_manager.list():
+        for instance in instances:
             if not instances_on_multiple_hosts:
                 rows.append((instance['workspace'], str(instance['port'])))
             else:
@@ -248,9 +248,26 @@ def handle_daemon(args):
         sys.exit(2)
 
     if args.list:
-        rows = [('Workspace', 'Daemon port')]
-        for instance in instance_manager.list('daemon'):
-            rows.append((instance['workspace'], str(instance['port'])))
+        instances = instance_manager.list('daemon')
+
+        instances_on_multiple_hosts = any(True for inst in instances
+                                          if inst['hostname'] !=
+                                          socket.gethostname())
+
+        if not instances_on_multiple_hosts:
+            rows = [('Workspace', 'Daemon port')]
+        else:
+            rows = [('Workspace', 'Computer host', 'Daemon port')]
+
+        for instance in instances:
+            if not instances_on_multiple_hosts:
+                rows.append((instance['workspace'], str(instance['port'])))
+            else:
+                rows.append((instance['workspace'],
+                             instance['hostname']
+                             if instance['hostname'] != socket.gethostname()
+                             else '',
+                             str(instance['port'])))
 
         print("Your running CodeChecker daemons:")
         util.print_table(rows)
@@ -259,9 +276,10 @@ def handle_daemon(args):
         for i in instance_manager.list('daemon'):
             # A STOP only stops the server associated with the given workspace
             # and view-port.
-            if args.stop and not (i['port'] == args.view_port and
-               os.path.abspath(i['workspace']) ==
-               os.path.abspath(workspace)):
+            if i['hostname'] != socket.gethostname() or (
+                        args.stop and not (i['port'] == args.view_port and
+                                           os.path.abspath(i['workspace']) ==
+                                           os.path.abspath(workspace))):
                 continue
 
             try:
