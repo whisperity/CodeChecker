@@ -214,7 +214,7 @@ class ResultHandler(object):
         pass
 
     @abstractmethod
-    def handle_results(self):
+    def handle_results(self, remove_root=None):
         """
         Handle the results.
         """

@@ -117,7 +117,7 @@ class PlistToStdout(ResultHandler):
                 (self.buildaction.analyzer_type, non_suppressed,
                  ntpath.basename(self.analyzed_source_file)))
 
-    def handle_results(self):
+    def handle_results(self, remove_root=None):
         plist = self.analyzer_result_file
 
         try:

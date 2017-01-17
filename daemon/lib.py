@@ -241,7 +241,7 @@ def unpack_check_fileargs(args, file_root):
 
 def handle_checking(run, context, callback=None, LOG=None):
     # Before the log-file parsing can continue, we must first "hackfix" the
-    # log file so that it uses the paths under file_root, not the paths on
+    # log file so that it uses the paths under daemon_root, not the paths on
     # the client's computer.
     fixed_file = os.path.join(os.path.dirname(run.args.logfile),
                               os.path.basename(run.args.logfile).
@@ -251,7 +251,7 @@ def handle_checking(run, context, callback=None, LOG=None):
     with open(fixed_file, 'w') as outf:
         with open(run.args.logfile, 'r+') as inf:
             commands = json.load(inf)
-            commands = _fix_compile_json(commands, run.file_root)
+            commands = _fix_compile_json(commands, run.args.daemon_root)
             json.dump(commands, outf,
                       indent=(4 if LOG.level == logging.DEBUG
                               or LOG.level == logging.DEBUG_ANALYZER
@@ -268,7 +268,7 @@ def handle_checking(run, context, callback=None, LOG=None):
         LOG.debug("Saving fixed SKIP file to " + fixed_file)
 
         skiplist_handler.preface_skip_file(run.args.skipfile,
-                                           run.file_root,
+                                           run.args.daemon_root,
                                            fixed_skip)
 
         run.args.skipfile = fixed_skip

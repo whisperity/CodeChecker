@@ -132,7 +132,8 @@ def check(check_data):
                 if rh.analyzer_stderr != '':
                     LOG.debug_analyzer('\n' + rh.analyzer_stderr)
                 rh.postprocess_result()
-                rh.handle_results()
+                rh.handle_results(args.daemon_root if 'daemon_root' in args
+                                  else None)
 
                 LOG.info("[%d/%d] %s analyzed %s successfully." %
                          (progress_checked_num.value, progress_actions.value,

@@ -101,7 +101,7 @@ class Bug(object):
 
 
 # -----------------------------------------------------------------------------
-def parse_plist(path):
+def parse_plist(path, remove_root=None):
     """
     Parse the plist file.
     """
@@ -111,6 +111,12 @@ def parse_plist(path):
         plist = plistlib.readPlist(path)
 
         files = plist['files']
+
+        if remove_root:
+            files_fixed = []
+            for f in files:
+                files_fixed.append(f.replace(remove_root, ''))
+            files = files_fixed
 
         for diag in plist['diagnostics']:
             current = Bug(files[diag['location']['file']],

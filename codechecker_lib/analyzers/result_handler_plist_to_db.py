@@ -122,7 +122,7 @@ class PlistToDB(ResultHandler):
 
             report_ids.append(report_id)
 
-    def handle_results(self):
+    def handle_results(self, remove_root=None):
         """
         Send the plist content to the database.
         Server API calls should be used in one connection.
@@ -158,7 +158,7 @@ class PlistToDB(ResultHandler):
             plist_file = self.analyzer_result_file
 
             try:
-                files, bugs = plist_parser.parse_plist(plist_file)
+                files, bugs = plist_parser.parse_plist(plist_file, remove_root)
             except Exception as ex:
                 LOG.debug(str(ex))
                 msg = 'Parsing the generated result file failed.'

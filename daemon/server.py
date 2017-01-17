@@ -58,21 +58,22 @@ class RemoteHandler(object):
         def __init__(self, workspace, run_name, local_invocation, args_json):
             self.workspace = workspace
             self.run_name = run_name
-            self.file_root = os.path.join(self.workspace, run_name)
             self.lock_created = datetime.now()
             self.__persistent_hash = util.get_hash([workspace,
                                                     run_name,
                                                     self.lock_created])[0:8]
 
+            file_root = os.path.join(self.workspace, run_name)
             self.args = Namespace(
                 # Mandatory field for indicating that the checking does
                 # NOT take place on a local machine!
                 is_remote_checking=True,
                 local_invocation=local_invocation,
+                daemon_root=file_root,
 
                 # Field overrides due to remote context.
                 name=run_name,
-                logfile=os.path.join(self.file_root,
+                logfile=os.path.join(file_root,
                                      daemon_lib.
                                      FILES_TO_ALWAYS_UPLOAD['logfile']),
 
@@ -151,10 +152,11 @@ class RemoteHandler(object):
                                               self.max_jobs))
             lock_object.args.jobs = self.max_jobs
 
-        first_connection_for_run = not os.path.exists(lock_object.file_root)
+        first_connection_for_run = not os.path.exists(
+            lock_object.args.daemon_root)
         if first_connection_for_run:
-            LOG.debug("Creating run folder at " + lock_object.file_root)
-            os.mkdir(lock_object.file_root)
+            LOG.debug("Creating run folder at " + lock_object.args.daemon_root)
+            os.mkdir(lock_object.args.daemon_root)
 
         self._running_checks[run_name] = lock_object
 
@@ -191,7 +193,7 @@ class RemoteHandler(object):
             if os.path.isabs(client_path):
                 # TODO: This won't work under Windows!
                 client_path = client_path.lstrip('/')
-            local_path = os.path.join(run.file_root, client_path)
+            local_path = os.path.join(run.args.daemon_root, client_path)
 
             # We also need to check if the proper directory structure exists
             if not os.path.exists(os.path.dirname(local_path)):
@@ -243,7 +245,7 @@ class RemoteHandler(object):
                 shared.ttypes.ErrorCode.GENERAL,
                 str("No run with the given token."))
 
-        daemon_lib.unpack_check_fileargs(run.args, run.file_root)
+        daemon_lib.unpack_check_fileargs(run.args, run.args.daemon_root)
         run.mark_running()
 
         check_process = threading.Thread(
