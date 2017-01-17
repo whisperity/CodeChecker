@@ -64,3 +64,22 @@ class SkipListHandler(object):
             skiplist_with_comment[line] = ''
 
         return skiplist_with_comment
+
+
+def preface_skip_file(skip_file, new_root, fixed_file):
+    """
+    Alters the given skip_file, appending the new_root before every record.
+    """
+
+    with open(fixed_file, 'w') as fixed_file:
+        with open(skip_file, 'r') as skip_file:
+            skip_file_content = [line.strip()
+                                 for line in skip_file
+                                 if line.strip() != '']
+
+        for line in skip_file_content:
+            if len(line) >= 2 and line[0] in ['-', '+']:
+                path = line[0] + new_root + \
+                       ('/' if line[1] != '/' else '') + line[1:]
+
+                fixed_file.write(path + '\n')

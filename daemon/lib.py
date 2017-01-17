@@ -13,6 +13,7 @@ import sys
 from codechecker_lib import analyzer
 from codechecker_lib import build_manager
 from codechecker_lib import log_parser
+from codechecker_lib import skiplist_handler
 from codechecker_lib import util
 
 from codechecker_gen.daemonServer.ttypes import *
@@ -242,14 +243,11 @@ def handle_checking(run, context, callback=None, LOG=None):
     # Before the log-file parsing can continue, we must first "hackfix" the
     # log file so that it uses the paths under file_root, not the paths on
     # the client's computer.
-    #
-    # TODO: HACK: This is a HACKFIX.
-    # TODO:       Later please implement a much more useful support for this!
     fixed_file = os.path.join(os.path.dirname(run.args.logfile),
                               os.path.basename(run.args.logfile).
                               replace('.json', '.fixed.json'))
 
-    LOG.debug("Saving fixed log file to " + fixed_file)
+    LOG.debug("Saving fixed LOG file to " + fixed_file)
     with open(fixed_file, 'w') as outf:
         with open(run.args.logfile, 'r+') as inf:
             commands = json.load(inf)
@@ -260,6 +258,20 @@ def handle_checking(run, context, callback=None, LOG=None):
                               else None))
 
     run.args.logfile = fixed_file
+
+    # We need to do the same with the skip-file as the paths in that file
+    # are also non-applicable to the daemon's folder layout.
+    if 'skipfile' in run.args:
+        fixed_skip = os.path.join(os.path.dirname(run.args.skipfile),
+                                  os.path.basename(run.args.skipfile) +
+                                  '.fixed')
+        LOG.debug("Saving fixed SKIP file to " + fixed_file)
+
+        skiplist_handler.preface_skip_file(run.args.skipfile,
+                                           run.file_root,
+                                           fixed_skip)
+
+        run.args.skipfile = fixed_skip
 
     log_file = build_manager.check_log_file(run.args, context)
     if not log_file:
