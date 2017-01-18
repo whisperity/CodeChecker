@@ -50,8 +50,8 @@ Starting a CodeChecker _daemon_ server requires executing the command:
 This command creates a CodeChecker workspace under `~/.codechecker`, which can
 be overridden by the `--workspace` flag. The daemon also takes the optional
 PostgreSQL database connection arguments, working in the same manner as
-[`CodeChecker check`](docs/user_guide.md) and [`CodeChecker
-server`](docs/user_guide.md).
+CodeChecker check](docs/user_guide.md) and [CodeChecker server]
+(docs/user_guide.md).
 
 The `--host` and `--port` argument specifies on which internet address and
 port the daemon listens on.
@@ -87,3 +87,19 @@ takes some extra arguments.
 ~~~~~~~~~~~~~~~~~
 
 
+Append these arguments to your usual invocation and the analysis will take
+place on the remote computer. For example:
+
+    CodeChecker check --name my_project --build "make" --remote-host 192.168.1.100
+
+CodeChecker will build the project as usual (or use an already existing
+`build.json` file with the `--logfile` argument) and then upload the
+neccessary data to the remote server and execute analysis.
+
+If `--remote-keep-alive` is specified, your local CodeChecker will wait until
+the server has finished analysing.
+
+## View results after running remote analysis
+
+Using the above example, the results can be viewed on the daemon host's
+server [192.168.1.100:8001](http://192.168.1.100:8001).

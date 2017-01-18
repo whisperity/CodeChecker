@@ -239,6 +239,8 @@ class RemoteHandler(object):
             run_object.mark_finished()
             del self._running_checks[run_object.run_name]
 
+            self.session.commit()
+
         run = self._get_run(token)
         if not run:
             LOG.error("Client commanded to start run #" + token + " but such"
