@@ -1,0 +1,13 @@
+#####################
+# This script sets up a fake entry point for a CodeChecker image
+# that has not been set to build and install CodeChecker itself,
+# only the environment.
+#####################
+#
+# This is a TEMPLATE, not to be called directly
+
+COPY false-start.sh /root/bin/false-start.sh
+
+RUN chmod 755 ~/bin/false-start.sh
+
+CMD '/root/bin/false-start.sh'

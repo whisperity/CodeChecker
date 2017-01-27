@@ -1,0 +1,9 @@
+#####################
+# This script retrieves CodeChecker from a local file on the build system.
+#
+# This code does NOT install a runnable CodeChecker package.
+#####################
+
+# Copy a make-docker.py created local tarball and unpack it in the image.
+# TODO: For some awkward reason, cannot use ~/codechecker_src here...
+ADD {LOCAL_PATH} /root/codechecker_src

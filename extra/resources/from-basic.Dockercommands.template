@@ -1,0 +1,7 @@
+#####################
+# This script retrieves CodeChecker from a git repo.
+#
+# This code does NOT install a runnable CodeChecker package.
+#####################
+
+RUN git clone {REPO_URL} ~/codechecker_src

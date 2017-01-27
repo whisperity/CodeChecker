@@ -1,0 +1,15 @@
+#####################
+# This script creates an INSTALLED docker image from the preconfigured
+# environment.
+#####################
+#
+# This is a TEMPLATE, not to be called directly
+
+RUN cd ~/codechecker_src && \
+     make package && \
+     mv ~/codechecker_src/build/CodeChecker/* ~ && \
+     rm -r ~/codechecker_src
+
+ENTRYPOINT ["/root/bin/CodeChecker"]
+
+CMD ["--help"]

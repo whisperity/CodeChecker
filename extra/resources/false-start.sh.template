@@ -1,0 +1,7 @@
+#!/usr/bin/env bash
+
+echo "This is NOT a proper CodeChecker install in the Docker image!"
+echo "Please create the Docker image with --install to get a runnable CodeChecker image."
+echo
+echo "To access the created environment, please \`docker run -t -i {INSTALL_NAME} /bin/bash\`"
+exit 127
