@@ -53,32 +53,42 @@ Install
 ### Linux
 
 For a detailed dependency list, please see [Requirements](docs/deps.md). The
-following commands are used to bootstrap CodeChecker on Ubuntu 14.04.2 LTS:
+following commands are used to bootstrap CodeChecker on Ubuntu 16.04.1 LTS:
 
 ~~~{.sh}
 # Install mandatory dependencies for a development and analysis environment
-# NOTE: clang-3.6 can be replaced by any later versions of LLVM/Clang
-sudo apt-get install clang-3.6 build-essential doxygen gcc-multilib git \
-  python-virtualenv python-dev thrift-compiler wget
-
-# Create a Python virtualenv and set it as your environment
-virtualenv -p /usr/bin/python2.7 ~/checker_env
-source ~/checker_env/bin/activate
+# NOTE: clang-3.8 can be replaced by any later versions of LLVM/Clang
+sudo apt-get install clang-3.8 build-essential curl doxygen gcc-multilib \
+  git python-virtualenv python-dev thrift-compiler
 
 # Check out CodeChecker
-git clone https://github.com/Ericsson/CodeChecker.git --depth 1
-cd codechecker
+git clone https://github.com/Ericsson/CodeChecker.git --depth 1 ~/codechecker
+cd ~/codechecker
 
-# Install the basic Python modules needed for operation
-pip install -r .ci/basic_python_requirements
+# Create a Python virtualenv and set it as your environment
+make venv
+source $PWD/venv/bin/activate
 
 # Build and install a CodeChecker package
-./build_package.py -o ~/codechecker_package
+make package
 
-# For ease of access, add the install directory for PATH
-export PATH="~/codechecker_package/CodeChecker/bin:$PATH"
+# For ease of access, add the build directory to PATH
+export PATH="$PWD/build/CodeChecker/bin:$PATH"
 
 cd ..
+~~~
+
+#### Upgrading environment after system or Python upgrade
+
+If you have upgraded your system's Python to a newer version (e.g. from
+`2.7.6` to `2.7.12` &ndash; this is the case when upgrading Ubuntu from
+14.04.2 LTS to 16.04.1 LTS), the installed environment will not work
+out-of-the-box. To fix this issue, run the following command to upgrade your
+`checker_env` too:
+
+~~~{.sh}
+cd ~/codechecker/venv
+virtualenv -p /usr/bin/python2.7 .
 ~~~
 
 ### Mac OS X
@@ -104,14 +114,19 @@ brew update
 brew install doxygen thrift gcc git
 
 # Fetch source code
-git clone https://github.com/tmsblgh/codechecker-osx-migration.git
-cd codechecker
+git clone https://github.com/Ericsson/CodeChecker.git --depth 1 ~/codechecker
+cd ~/codechecker
 
-# Install required basic python modules
-pip install -r .ci/basic_python_requirements
+# Create a Python virtualenv and set it as your environment
+make venv
+source $PWD/venv/bin/activate
 
-# Create codechecker package
-./build_package.py -o ~/codechecker_package
+# Build and install a CodeChecker package
+make package
+
+# For ease of access, add the build directory to PATH
+export PATH="$PWD/build/CodeChecker/bin:$PATH"
+
 cd ..
 ~~~
 
@@ -122,25 +137,25 @@ Check your first project
 
 _Clang_ and/or _Clang-Tidy_ must be available on your system before you can
 run analysis on a test project. The binaries are usually named `clang` or
-`clang-3.6` (and `clang-tidy` or `clang-tidy-3.6`, respectively), but this
+`clang-3.8` (and `clang-tidy` or `clang-tidy-3.8`, respectively), but this
 depends on your Linux distribution.
 
 
-    which clang-3.6
-    which clang-tidy-3.6
+    which clang-3.8
+    which clang-tidy-3.8
 
 
 If `clang` or `clang-tidy` is not an available command, you must configure the
 installed CodeChecker package to use the appropriate binaries for analysis.
 Edit the configuration file
-`~/codechecker_package/CodeChecker/config/package_layout.json`. In the
+`~/codechecker/build/CodeChecker/config/package_layout.json`. In the
 `runtime/analyzers` section, you must set the values, as shown below, to the
 clang binaries available in your `PATH`.
 
 ~~~{.json}
 "analyzers" : {
-  "clangsa" : "clang-3.6",
-  "clang-tidy" : "clang-tidy-3.6"
+  "clangsa" : "clang-3.8",
+  "clang-tidy" : "clang-tidy-3.8"
 },
 ~~~
 
@@ -150,11 +165,11 @@ These steps must always be taken in a new command prompt you wish to execute
 analysis in.
 
 ~~~{.sh}
-source ~/checker_env/bin/activate
+source ~/codechecker/venv/bin/activate
 
 # Path of CodeChecker package
 # NOTE: SKIP this line if you want to always specify CodeChecker's full path
-export PATH=~/codechecker_package/CodeChecker/bin:$PATH
+export PATH=~/codechecker/build/CodeChecker/bin:$PATH
 
 # Path of `scan-build.py` (intercept-build)
 # NOTE: SKIP this line if you don't want to use intercept-build
@@ -186,25 +201,26 @@ the `-w` flag.
 Open the [CodeChecker Web Viewer](http://localhost:8001) in your browser, and
 you should be greeted with a web application showing you the analysis results.
 
-Known important limitations
----------------------------
+Important limitations with older Clang versions
+-----------------------------------------------
 
-CodeChecker requires some new features from LLVM/Clang to work properly.
+CodeChecker requires some features from LLVM/Clang to work properly which are
+not available in the `3.6` or earlier releases.
 
 If your installed Clang does not support these features you will see the
 following debug messages in your log:
 
 > Check name wasn't found in the plist file.
 
-Use clang `>= 3.7` or trunk `r228624` &mdash; otherwise CodeChecker makes a
-guess based on the report message
+ * Use clang `>= 3.7` or trunk `r228624` &mdash; otherwise CodeChecker makes
+   a guess based on the report message.
 
 > Hash value wasn't found in the plist file.
 
-Use clang `>= 3.8` or trunk `r251011` &mdash; otherwise CodeChecker generates
-a simple hash based on the filename and the line content. This method is
-applied for Clang-Tidy results too, because Clang-Tidy does not support
-bug identifier hash generation currently
+ * Use clang `>= 3.8` or trunk `r251011` &mdash; otherwise CodeChecker
+   generates a simple hash based on the filename and the line content. This
+   method is applied for Clang-Tidy results too, because Clang-Tidy does not
+   support bug identifier hash generation currently.
 
 
 Additional documentation

@@ -1,0 +1,18 @@
+#####################
+# This script installs the additional "full environment" modules into a
+# previously checked out CodeChecker folder:
+#  - Additional system libs and executables
+#  - Additional Python modules
+#####################
+#
+# This is a TEMPLATE, not to be called directly.
+
+RUN apt-get install --no-install-recommends -y \
+      libpq-dev \
+      postgresql \
+      postgresql-client-common \
+      postgresql-common
+
+# TODO: Set up PostgreSQL database in the thingy
+
+RUN pip install -r ~/codechecker_src/.ci/python_requirements

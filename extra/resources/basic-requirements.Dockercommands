@@ -1,0 +1,11 @@
+#####################
+# This script sets up the MINIMAL CodeChecker environment:
+#  - Basic required python modules
+#
+# Executing this step requires the CodeChecker source code to be available
+# under ~/codechecker_src!
+#
+# This code does NOT install a runnable CodeChecker package.
+#####################
+
+RUN pip install -r ~/codechecker_src/.ci/basic_python_requirements

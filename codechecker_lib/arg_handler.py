@@ -7,6 +7,7 @@
 Handle command line arguments.
 """
 import atexit
+import errno
 import json
 import multiprocessing
 import os
@@ -216,12 +217,21 @@ def handle_server(args):
                     'checker_md_docs': checker_md_docs,
                     'checker_md_docs_map': checker_md_docs_map}
 
-    client_db_access_server.start_server(package_data,
-                                         args.view_port,
-                                         db_connection_string,
-                                         suppress_handler,
-                                         args.not_host_only,
-                                         context)
+    try:
+        client_db_access_server.start_server(package_data,
+                                             args.view_port,
+                                             db_connection_string,
+                                             suppress_handler,
+                                             args.not_host_only,
+                                             context.db_version_info)
+    except socket.error as err:
+        if err.errno == errno.EADDRINUSE:
+            LOG.error("Server can't be started, maybe the given port number "
+                      "({}) is already used. Check the connection "
+                      "parameters.".format(args.view_port))
+            sys.exit(1)
+        else:
+            raise
 
 
 def handle_daemon(args):
@@ -438,29 +448,6 @@ def handle_check(args):
             sys.exit(1)
 
         args.workspace = os.path.abspath(args.workspace)
-
-        # In remote mode, connect to the remote daemon
-        # and use a temporary workspace
-        if remote:
-            args.workspace = os.path.realpath(util.get_temporary_workspace())
-
-            rclient = daemon_client.RemoteClient(args.remote_host,
-                                                 args.remote_port)
-            try:
-                can_run = rclient.pollCheckAvailability(args.name)
-            except Exception as e:
-                LOG.error(e.message)
-                LOG.error("Couldn't initiate remote checking on [{0}:{1}]"
-                          .format(args.remote_host or 'localhost',
-                                  args.remote_port))
-                sys.exit(1)
-
-            if not can_run:
-                LOG.error("Server did not accept the request to run '" +
-                          args.name + "'. It is either overloaded or a run " +
-                          "with the given name is already being executed.")
-                sys.exit(1)
-
         if not os.path.isdir(args.workspace):
             os.mkdir(args.workspace)
 
@@ -468,7 +455,7 @@ def handle_check(args):
         context.codechecker_workspace = args.workspace
         context.db_username = args.dbusername
 
-        log_file = build_manager.check_log_file(args, context)
+        log_file, set_in_cmdline = build_manager.check_log_file(args, context)
 
         if not log_file:
             LOG.error("Failed to generate compilation command file: " +
@@ -555,7 +542,7 @@ def handle_check(args):
         print(traceback.format_exc())
     finally:
         if not args.keep_tmp:
-            if log_file:
+            if log_file and not set_in_cmdline:
                 LOG.debug('Removing temporary log file: ' + log_file)
                 os.remove(log_file)
 
@@ -579,14 +566,7 @@ def _do_quickcheck(args):
         context.codechecker_workspace = args.workspace
         args.name = "quickcheck"
 
-        # Load severity map from config file.
-        if os.path.exists(context.checkers_severity_map_file):
-            with open(context.checkers_severity_map_file, 'r') as sev_file:
-                severity_config = sev_file.read()
-
-            context.severity_map = json.loads(severity_config)
-
-        log_file = build_manager.check_log_file(args, context)
+        log_file, set_in_cmdline = build_manager.check_log_file(args, context)
         actions = log_parser.parse_log(log_file,
                                        args.add_compiler_defaults)
         analyzer.run_quick_check(args, context, actions)
@@ -595,7 +575,7 @@ def _do_quickcheck(args):
         LOG.error("Running quickcheck failed.")
     finally:
         if not args.keep_tmp:
-            if log_file:
+            if log_file and not set_in_cmdline:
                 LOG.debug('Removing temporary log file: ' + log_file)
                 os.remove(log_file)
 
@@ -628,7 +608,7 @@ def consume_plist(item):
                                                  action,
                                                  context.run_id,
                                                  args.directory,
-                                                 {},
+                                                 context.severity_map,
                                                  None,
                                                  None,
                                                  not args.stdout)
@@ -637,7 +617,7 @@ def consume_plist(item):
     rh.buildaction.analyzer_type = 'Build action from plist'
     rh.buildaction.original_command = plist
     rh.analyzer_cmd = ''
-    rh.analyzer.analyzed_source_file = ''  # TODO: fill from plist.
+    rh.analyzed_source_file = ''  # TODO: fill from plist.
     rh.result_file = os.path.join(args.directory, plist)
     rh.handle_results()
 

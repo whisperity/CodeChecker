@@ -1,0 +1,11 @@
+#####################
+# This script retrieves CodeChecker from an arbitrary remote URL.
+#
+# This code does NOT install a runnable CodeChecker package.
+#####################
+
+RUN {CURL_COMMAND} > ~/{LOCAL_FILENAME} && \
+     cd ~ && \
+     {EXTRACT_COMMAND} && \
+     mv ~/{EXPORTED_GLOB} ~/codechecker_src && \
+     rm ~/{LOCAL_FILENAME}

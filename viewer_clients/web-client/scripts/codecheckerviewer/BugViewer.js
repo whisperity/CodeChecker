@@ -79,7 +79,8 @@ function (declare, dom, style, on, query, Memory, Observable, topic,
         mode : 'text/x-c++src',
         foldGutter : true,
         gutters : ['CodeMirror-linenumbers', 'bugInfo'],
-        extraKeys : {}
+        extraKeys : {},
+        viewportMargin : 500
       });
 
       this.codeMirror.on('viewportChange', function (cm, from, to) {
@@ -241,7 +242,6 @@ function (declare, dom, style, on, query, Memory, Observable, topic,
       this.sourceFileData = sourceFileData;
       this.set('content', sourceFileData.fileContent);
       this.set('filepath', sourceFileData.filePath);
-      this.drawBugPath();
       this.jumpTo(this.reportData.lastBugPosition.startLine, 0);
     },
 
@@ -393,8 +393,11 @@ function (declare, dom, style, on, query, Memory, Observable, topic,
         that.bugStore.put(item);
       });
 
-      var filepath = this.reportData.checkedFile.substr(
-        0, this.reportData.checkedFile.indexOf(' '));
+      var endPos = this.reportData.checkedFile.indexOf(' ');
+      if (endPos === -1)
+        endPos = this.reportData.checkedFile.length;
+
+      var filepath = this.reportData.checkedFile.substr(0, endPos);
 
       var filter_sup = new CC_OBJECTS.ReportFilter();
       filter_sup.filepath = filepath;
@@ -446,7 +449,9 @@ function (declare, dom, style, on, query, Memory, Observable, topic,
         hashHelper.setReport(item.report.reportId);
       }
 
-      this.editor.drawBugPath();
+      if (this.buttonPane.showArrowCheckbox.get('checked'))
+        this.editor.drawBugPath();
+
       this.editor.jumpTo(line, column);
 
       if (item.bugPathEvent)
@@ -629,7 +634,7 @@ function (declare, dom, style, on, query, Memory, Observable, topic,
 
       //--- Show arrows ---//
 
-      var showArrowCheckbox = new CheckBox({
+      this.showArrowCheckbox = new CheckBox({
         checked : true,
         style : 'margin: 5px;',
         onChange : function (checked) {
@@ -641,14 +646,14 @@ function (declare, dom, style, on, query, Memory, Observable, topic,
         }
       });
 
-      this.addChild(showArrowCheckbox);
+      this.addChild(this.showArrowCheckbox);
 
       var label = dom.create('label', {
-        for : showArrowCheckbox.get('id'),
+        for : this.showArrowCheckbox.get('id'),
         innerHTML : 'Show arrows'
       });
 
-      dom.place(label, showArrowCheckbox.domNode, 'after');
+      dom.place(label, this.showArrowCheckbox.domNode, 'after');
     }
   });
 
@@ -669,18 +674,21 @@ function (declare, dom, style, on, query, Memory, Observable, topic,
       CC_SERVICE.getSourceFileData(this.reportData.fileId, true,
       function (sourceFileData) {
         that._editor.set('sourceFileData', sourceFileData);
+        that._editor.drawBugPath();
       });
 
       this.addChild(this._editor);
 
       //--- Buttons ---//
 
-      this.addChild(new ButtonPane({
+      var buttonPane = new ButtonPane({
         region : 'top',
         reportData : this.reportData,
         runData : this.runData,
         editor : this._editor
-      }));
+      });
+
+      this.addChild(buttonPane);
 
       //--- Tree ---//
 
@@ -690,7 +698,8 @@ function (declare, dom, style, on, query, Memory, Observable, topic,
         reportData : this.reportData,
         runData : this.runData,
         style : 'width: 300px;',
-        editor : this._editor
+        editor : this._editor,
+        buttonPane : buttonPane
       });
 
       this.addChild(bugStoreModelTree);
