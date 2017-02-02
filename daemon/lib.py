@@ -283,7 +283,7 @@ def handle_checking(run, context, callback=None, LOG=None):
                                    run.args.add_compiler_defaults)
 
     try:
-        analyzer.run_check(run.args, actions, context)
+        analyzer.run_quick_check(run.args, context, actions, export_plist=True)
     finally:
         run.mark_finished()
 

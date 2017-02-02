@@ -317,33 +317,33 @@ def handle_daemon(args):
     context.db_username = args.dbusername
 
     # Set up a checking environment and a database connection
-    check_env = analyzer_env.get_check_env(context.path_env_extra,
-                                           context.ld_lib_path_extra)
-
-    sql_server = SQLServer.from_cmdline_args(args,
-                                             context.
-                                             codechecker_workspace,
-                                             context.migration_root,
-                                             check_env)
-
-    conn_mgr = client.ConnectionManager(sql_server, 'localhost',
-                                        util.get_free_port())
-
-    sql_server.start(context.db_version_info, wait_for_start=True,
-                     init=True)
-
-    conn_mgr.start_report_server()
-
-    LOG.info("Checker server started.")
+    # check_env = analyzer_env.get_check_env(context.path_env_extra,
+    #                                        context.ld_lib_path_extra)
+    #
+    # sql_server = SQLServer.from_cmdline_args(args,
+    #                                          context.
+    #                                          codechecker_workspace,
+    #                                          context.migration_root,
+    #                                          check_env)
+    #
+    # conn_mgr = client.ConnectionManager(sql_server, 'localhost',
+    #                                     util.get_free_port())
+    #
+    # sql_server.start(context.db_version_info, wait_for_start=True,
+    #                  init=True)
+    #
+    # conn_mgr.start_report_server()
+    #
+    # LOG.info("Checker server started.")
 
     # Start database viewer.
-    db_connection_string = sql_server.get_connection_string()
+    # db_connection_string = sql_server.get_connection_string()
 
     is_server_started = multiprocessing.Event()
     server = multiprocessing.Process(target=daemon_server.run_server,
                                      args=(
                                          args,
-                                         db_connection_string,
+                                         '',  # db_connection_string,
                                          context,
                                          is_server_started))
 
@@ -616,7 +616,8 @@ def handle_quickcheck(args):
     try:
         _do_quickcheck(args)
     finally:
-        shutil.rmtree(args.workspace)
+        if not args.keep_tmp:
+            shutil.rmtree(args.workspace)
 
 
 def consume_plist(item):

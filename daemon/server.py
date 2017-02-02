@@ -78,6 +78,7 @@ class RemoteHandler(object):
                 logfile=os.path.join(file_root,
                                      daemon_lib.
                                      FILES_TO_ALWAYS_UPLOAD['logfile']),
+                print_steps=True,
 
                 # TODO: Review these overrides!
                 add_compiler_defaults=False,
@@ -239,7 +240,7 @@ class RemoteHandler(object):
             run_object.mark_finished()
             del self._running_checks[run_object.run_name]
 
-            self.session.commit()
+            # self.session.commit()
 
         run = self._get_run(token)
         if not run:
@@ -292,7 +293,7 @@ class RemoteHandler(object):
         self._running_checks = {}
         self.context = context
         self.workspace = context.codechecker_workspace
-        self.session = session
+        # self.session = session
         self.max_runs = max_runs
         self.max_jobs = max_jobs_per_run
 
@@ -302,17 +303,18 @@ def run_server(args, db_uri, context, callback_event=None):
     port = args.port
     LOG.debug('Starting CodeChecker daemon ...')
 
-    try:
-        engine = database_handler.SQLServer.create_engine(db_uri)
-
-        LOG.debug('Creating new database session.')
-        session = CreateSession(engine)
-
-    except sqlalchemy.exc.SQLAlchemyError as alch_err:
-        LOG.error(str(alch_err))
-        sys.exit(1)
-
-    session.autoflush = False  # Autoflush is enabled by default.
+    session = None
+    # try:
+    #     engine = database_handler.SQLServer.create_engine(db_uri)
+    #
+    #     LOG.debug('Creating new database session.')
+    #     session = CreateSession(engine)
+    #
+    # except sqlalchemy.exc.SQLAlchemyError as alch_err:
+    #     LOG.error(str(alch_err))
+    #     sys.exit(1)
+    #
+    # session.autoflush = False  # Autoflush is enabled by default.
 
     LOG.debug('Starting thrift server.')
     try:
