@@ -273,7 +273,7 @@ def handle_checking(run, context, callback=None, LOG=None):
 
         run.args.skipfile = fixed_skip
 
-    log_file = build_manager.check_log_file(run.args, context)
+    log_file, _ = build_manager.check_log_file(run.args, context)
     if not log_file:
         LOG.error("Failed to generate compilation command file: " +
                   log_file)

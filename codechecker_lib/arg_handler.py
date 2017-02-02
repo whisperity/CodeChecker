@@ -223,7 +223,7 @@ def handle_server(args):
                                              db_connection_string,
                                              suppress_handler,
                                              args.not_host_only,
-                                             context.db_version_info)
+                                             context)
     except socket.error as err:
         if err.errno == errno.EADDRINUSE:
             LOG.error("Server can't be started, maybe the given port number "
@@ -448,6 +448,29 @@ def handle_check(args):
             sys.exit(1)
 
         args.workspace = os.path.abspath(args.workspace)
+
+        # In remote mode, connect to the remote daemon
+        # and use a temporary workspace
+        if remote:
+            args.workspace = os.path.realpath(util.get_temporary_workspace())
+
+            rclient = daemon_client.RemoteClient(args.remote_host,
+                                                 args.remote_port)
+            try:
+                can_run = rclient.pollCheckAvailability(args.name)
+            except Exception as e:
+                LOG.error(e.message)
+                LOG.error("Couldn't initiate remote checking on [{0}:{1}]"
+                          .format(args.remote_host or 'localhost',
+                                  args.remote_port))
+                sys.exit(1)
+
+            if not can_run:
+                LOG.error("Server did not accept the request to run '" +
+                          args.name + "'. It is either overloaded or a run " +
+                          "with the given name is already being executed.")
+                sys.exit(1)
+
         if not os.path.isdir(args.workspace):
             os.mkdir(args.workspace)
 

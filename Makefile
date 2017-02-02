@@ -33,6 +33,7 @@ thrift: build_dir
 	thrift -r -o build -I thrift_api/ --gen py thrift_api/report_storage_server.thrift
 	thrift -r -o build -I thrift_api/ --gen py --gen js:query thrift_api/report_viewer_server.thrift
 	thrift -r -o build -I thrift_api/ --gen py thrift_api/authentication.thrift
+	thrift -r -o $(BUILD_DIR) -I thrift_api/ --gen py thrift_api/daemon_server.thrift
 
 package: build_dir gen-docs thrift
 	if [ ! -d "$(BUILD_DIR)/CodeChecker" ]; then \
