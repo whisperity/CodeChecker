@@ -4,16 +4,12 @@
 #   License. See LICENSE.TXT for details.
 # -------------------------------------------------------------------------
 
-import linecache
-import math
 import ntpath
 import os
 import shutil
-import sys
 from abc import ABCMeta
 
 from codechecker_lib import plist_parser
-from codechecker_lib import suppress_handler
 from codechecker_lib.logger import LoggerFactory
 from codechecker_lib.analyzers.result_handler_base import ResultHandler
 
@@ -27,9 +23,9 @@ class PlistToFile(ResultHandler):
 
     __metaclass__ = ABCMeta
 
-    def __init__(self, buildaction, workspace, lock):
+    def __init__(self, buildaction, workspace, export_plist_path):
         super(PlistToFile, self).__init__(buildaction, workspace)
-        self.__lock = lock
+        self.__folder = export_plist_path
 
     @property
     def print_steps(self):
@@ -45,12 +41,12 @@ class PlistToFile(ResultHandler):
         """
         self.__print_steps = value
 
-    def handle_results(self, jailed_root):
+    def handle_results(self):
         """This handler copies the plist file into the jailed_root."""
         plist = self.analyzer_result_file
 
         try:
-            plist_parser.parse_plist(plist, jailed_root)
+            files, _ = plist_parser.parse_plist(plist)
         except Exception as ex:
             LOG.error('The generated plist is not valid!')
             LOG.error(ex)
@@ -58,22 +54,19 @@ class PlistToFile(ResultHandler):
 
         err_code = self.analyzer_returncode
 
+        if len(files) == 0:
+            LOG.debug("Will not export '" +
+                      plist + "', because plist is empty.")
+            return err_code
+
         if err_code == 0:
-            try:
-                # No lock when consuming plist.
-                self.__lock.acquire() if self.__lock else None
-                with open(plist, 'r') as pl:
-                    with open(os.path.join(jailed_root,
-                                           os.path.basename(plist)),
-                              'w') as out:
-                        for line in pl:
-                            out.write(line.replace(jailed_root, ''))
-            finally:
-                self.__lock.release() if self.__lock else None
+            shutil.copy(plist, os.path.join(self.__folder,
+                                            os.path.basename(plist)))
+            LOG.debug("Exported '" + os.path.basename(plist) + "'")
         else:
-            self.__output.write('Analyzing %s with %s failed.\n' %
-                                (ntpath.basename(self.analyzed_source_file),
-                                 self.buildaction.analyzer_type))
+            LOG.error('Analyzing %s with %s failed.\n' %
+                      (ntpath.basename(self.analyzed_source_file),
+                       self.buildaction.analyzer_type))
         return err_code
 
     def postprocess_result(self):

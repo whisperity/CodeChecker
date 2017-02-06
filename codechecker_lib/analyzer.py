@@ -147,7 +147,7 @@ def run_check(args, actions, context):
 def run_quick_check(args,
                     context,
                     actions,
-                    export_plist=False):
+                    export_plist_path=None):
     """
     This function implements the "quickcheck" feature.
     No result is stored to a database.
@@ -169,4 +169,4 @@ def run_quick_check(args,
 
     analysis_manager.start_workers(args, actions, context, analyzer_config_map,
                                    _get_skip_handler(args),
-                                   False, export_plist)
+                                   False, export_plist_path)

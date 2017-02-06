@@ -358,7 +358,7 @@ def construct_result_handler(args,
                              skiplist_handler,
                              lock,
                              store_to_db=False,
-                             force_plist_export=False):
+                             export_plist_path=None):
     """
     Construct a result handler.
     """
@@ -379,7 +379,7 @@ def construct_result_handler(args,
                 report_output,
                 run_id)
 
-    elif not store_to_db and not force_plist_export:
+    elif not store_to_db and not export_plist_path:
         if buildaction.analyzer_type == CLANG_SA:
             res_handler = result_handler_plist_to_stdout.PlistToStdout(
                 buildaction,
@@ -392,19 +392,19 @@ def construct_result_handler(args,
                 buildaction,
                 report_output,
                 lock)
-    elif force_plist_export:
+    elif export_plist_path:
         if buildaction.analyzer_type == CLANG_SA:
             res_handler = result_handler_plist_to_file.PlistToFile(
                 buildaction,
                 report_output,
-                lock)
+                export_plist_path)
             res_handler.print_steps = args.print_steps
 
         elif buildaction.analyzer_type == CLANG_TIDY:
             res_handler = result_handler_clang_tidy.ClangTidyPlistToFile(
                 buildaction,
                 report_output,
-                lock)
+                export_plist_path)
 
     res_handler.severity_map = severity_map
     res_handler.skiplist_handler = skiplist_handler

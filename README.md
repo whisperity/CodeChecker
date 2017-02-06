@@ -93,10 +93,14 @@ virtualenv -p /usr/bin/python2.7 .
 
 ### Mac OS X
 
-The following commands are used to bootstrap CodeChecker on OS X El Capitan
-10.11.5 and macOS Sierra 10.12 Beta.
+In OSX environment the intercept-build tool from [scan-build](https://github.com/rizsotto/scan-build)
+is used to log the compiler invocations.
 
-On El Capitan System Integrity Protection (SIP) needs to be turned off:
+
+It is possible that the [intercept-build can not log](https://github.com/rizsotto/scan-build#limitations)
+the compiler calls without turning off System Integrity Protection (SIP). `intercept build` can automatically detect if SIP is turned off.
+
+You can turn off SIP on El Capitan this way:
   * Click the  (Apple) menu.
   * Select Restart...
   * Hold down command-R to boot into the Recovery System.
@@ -105,13 +109,16 @@ On El Capitan System Integrity Protection (SIP) needs to be turned off:
   * Close the Terminal app.
   * Click the  (Apple) menu and select Restart....
 
+The following commands are used to bootstrap CodeChecker on OS X El Capitan 10.11.5 and macOS Sierra 10.12 Beta.
+
 Check out and build LLVM/Clang with extra tools. Follow the [Get Started with
 LLVM/Clang](http://clang.llvm.org/get_started.html) documentation.
 
 ~~~{.sh}
 # Download and install dependencies
 brew update
-brew install doxygen thrift gcc git
+brew install doxygen gcc git
+brew install homebrew/versions/thrift090
 
 # Fetch source code
 git clone https://github.com/Ericsson/CodeChecker.git --depth 1 ~/codechecker
