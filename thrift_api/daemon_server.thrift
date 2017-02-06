@@ -61,9 +61,18 @@ service RemoteChecking {
     // after the client is sure that it fulfilled the server's request on every needed file,
     // this method begins to run the check on the server
     void beginChecking(
-                       1: string token,
-                       2: bool   disconnect_immediately)
+                       1: string token)
                        throws (1: shared.RequestFailed requestError),
+
+    // retrieve the analysis results for the run with the given token
+    FileList fetchPlists(
+                         1: string token)
+                         throws (1: shared.RequestFailed requestError),
+
+    // removes the given run from the list of running checks on the server
+    void expire(
+                1: string token)
+                throws (1: shared.RequestFailed requestError),
 
     // get the list of checkers available on the daemon server
     CheckerList getCheckerList(

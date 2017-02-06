@@ -5,6 +5,8 @@ CodeChecker supports a daemon mode in which analysis is not run on the
 developer computer which runs the build, but rather on a remote (team server,
 corporate cloud) host.
 
+> **TODO:** This docs is outdated **as fuck**.
+
 # Setting up the daemon
 ~~~~~~~~~~~~~~~~~~~~~~
 usage: CodeChecker daemon [-h] [-w WORKSPACE] [--port PORT] [--host HOST]
@@ -72,8 +74,13 @@ workspace you started the daemon with.
 
 # Running remote analysis
 
-To execute an analysis on the remote server, the `CodeChecker check` command
-takes some extra arguments.
+To execute an analysis on the remote server, the `CodeChecker remote` command
+takes some extra arguments to that of `CodeChecker check`:
+
+~~~~~~~~~~~~~~~~~
+ARGUMENT LIST OF CodeChecker remote
+~~~~~~~~~~~~~~~~~
+
 
 ~~~~~~~~~~~~~~~~~
   --remote-host REMOTE_HOST, --host REMOTE_HOST, -r REMOTE_HOST
@@ -82,24 +89,15 @@ takes some extra arguments.
   --remote-port REMOTE_PORT, -p REMOTE_PORT
                         Use a remote daemon available on this port to check
                         the project, instead of a local instance.
-  --remote-keep-alive   If set, the local command will not exit until the
-                        server reports that checking has finished.
 ~~~~~~~~~~~~~~~~~
 
 
 Append these arguments to your usual invocation and the analysis will take
 place on the remote computer. For example:
 
-    CodeChecker check --name my_project --build "make" --remote-host 192.168.1.100
+    CodeChecker remote --name my_project --build "make" --remote-host 192.168.1.100
 
 CodeChecker will build the project as usual (or use an already existing
 `build.json` file with the `--logfile` argument) and then upload the
 neccessary data to the remote server and execute analysis.
 
-If `--remote-keep-alive` is specified, your local CodeChecker will wait until
-the server has finished analysing.
-
-## View results after running remote analysis
-
-Using the above example, the results can be viewed on the daemon host's
-server [192.168.1.100:8001](http://192.168.1.100:8001).

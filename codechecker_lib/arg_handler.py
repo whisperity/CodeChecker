@@ -316,34 +316,10 @@ def handle_daemon(args):
     session_manager.SessionManager.CodeChecker_Workspace = workspace
     context.db_username = args.dbusername
 
-    # Set up a checking environment and a database connection
-    # check_env = analyzer_env.get_check_env(context.path_env_extra,
-    #                                        context.ld_lib_path_extra)
-    #
-    # sql_server = SQLServer.from_cmdline_args(args,
-    #                                          context.
-    #                                          codechecker_workspace,
-    #                                          context.migration_root,
-    #                                          check_env)
-    #
-    # conn_mgr = client.ConnectionManager(sql_server, 'localhost',
-    #                                     util.get_free_port())
-    #
-    # sql_server.start(context.db_version_info, wait_for_start=True,
-    #                  init=True)
-    #
-    # conn_mgr.start_report_server()
-    #
-    # LOG.info("Checker server started.")
-
-    # Start database viewer.
-    # db_connection_string = sql_server.get_connection_string()
-
     is_server_started = multiprocessing.Event()
     server = multiprocessing.Process(target=daemon_server.run_server,
                                      args=(
                                          args,
-                                         '',  # db_connection_string,
                                          context,
                                          is_server_started))
 
@@ -422,57 +398,11 @@ def handle_check(args):
     Based on the log runs the analysis.
     """
 
-    remote = 'remote_host' in args or \
-             'remote_port' in args or \
-             'remote_keepalive' in args
-    if remote:
-        # Set the default values here if the user did specify that we go
-        # remote, but didn't specify EVERY variable.
-
-        if not getattr(args, 'remote_host', None):
-            setattr(args, 'remote_host', 'localhost')
-        if not getattr(args, 'remote_port', None):
-            setattr(args, 'remote_port', 8002)
-        if not getattr(args, 'remote_keepalive', None):
-            setattr(args, 'remote_keepalive', False)
-
-        LOG.info(''.join(['Using remote check at [',
-                          args.remote_host or '',
-                          ':', str(args.remote_port), ']']))
-        if args.remote_keepalive:
-            LOG.info('Command will wait until the server finishes analysing.')
-
-    log_file = None
     try:
         if not host_check.check_zlib():
             sys.exit(1)
 
         args.workspace = os.path.abspath(args.workspace)
-
-        # In remote mode, connect to the remote daemon
-        # and use a temporary workspace
-        if remote:
-            args.workspace = os.path.realpath(util.get_temporary_workspace())
-
-            rclient = daemon_client.RemoteClient(args.remote_host,
-                                                 args.remote_port)
-            try:
-                can_run = rclient.pollCheckAvailability(args.name)
-            except Exception as e:
-                LOG.error(e.message)
-                LOG.error("Couldn't initiate remote checking on [{0}:{1}]"
-                          .format(args.remote_host or 'localhost',
-                                  args.remote_port))
-                sys.exit(1)
-
-            if not can_run:
-                LOG.error("Server did not accept the request to run '" +
-                          args.name + "'. It is either overloaded or a run " +
-                          "with the given name is already being executed.")
-                sys.exit(1)
-
-        if not os.path.isdir(args.workspace):
-            os.mkdir(args.workspace)
 
         context = generic_package_context.get_context()
         context.codechecker_workspace = args.workspace
@@ -488,77 +418,30 @@ def handle_check(args):
         actions = log_parser.parse_log(log_file,
                                        args.add_compiler_defaults)
 
-        if not remote:
-            # ---- Local check mode ----
+        check_env = analyzer_env.get_check_env(context.path_env_extra,
+                                               context.ld_lib_path_extra)
 
-            check_env = analyzer_env.get_check_env(context.path_env_extra,
-                                                   context.ld_lib_path_extra)
+        sql_server = SQLServer.from_cmdline_args(args,
+                                                 context.
+                                                 codechecker_workspace,
+                                                 context.migration_root,
+                                                 check_env)
 
-            sql_server = SQLServer.from_cmdline_args(args,
-                                                     context.
-                                                     codechecker_workspace,
-                                                     context.migration_root,
-                                                     check_env)
+        conn_mgr = client.ConnectionManager(sql_server, 'localhost',
+                                            util.get_free_port())
 
-            conn_mgr = client.ConnectionManager(sql_server, 'localhost',
-                                                util.get_free_port())
+        sql_server.start(context.db_version_info, wait_for_start=True,
+                         init=True)
 
-            sql_server.start(context.db_version_info, wait_for_start=True,
-                             init=True)
+        conn_mgr.start_report_server()
 
-            conn_mgr.start_report_server()
+        LOG.debug("Checker server started.")
 
-            LOG.debug("Checker server started.")
+        analyzer.run_check(args, actions, context)
 
-            analyzer.run_check(args, actions, context)
+        LOG.info("Analysis has finished.")
 
-            LOG.info("Analysis has finished.")
-
-            log_startserver_hint(args)
-        else:
-            # ---- Remote check mode ----
-
-            LOG.debug("Logfile generation was successful in " + log_file)
-
-            try:
-                ack = rclient.initConnection(args.name,
-                                             ' '.join(sys.argv),
-                                             daemon_lib.pack_check_args(args))
-            except Exception as e:
-                LOG.error("Couldn't start uploading data to server: " +
-                          e.message)
-                sys.exit(1)
-
-            if not ack.is_initial:
-                LOG.debug("Generating file transport for modified files "
-                          "and metadata")
-            else:
-                LOG.debug("Generating file transport for all files.")
-
-            # Send the build.json, and other mandatory configuration files,
-            # the source codes and the dependency metadata to the server.
-            args.logfile = log_file
-            initialfiles = daemon_lib.create_initial_file_data(args,
-                                                               actions,
-                                                               ack.is_initial)
-
-            LOG.debug("Sending files to server...")
-            wrongfiles = rclient.sendFileData(ack.token, initialfiles)
-
-            while len(wrongfiles) != 0:
-                LOG.debug(str(len(wrongfiles)) +
-                          " more files reported by server as required.")
-                fds = daemon_lib.create_file_data_from_paths(wrongfiles)
-                wrongfiles = rclient.sendFileData(ack.token, fds)
-
-            LOG.info('All files successfully uploaded to remote server.')
-
-            # Tell the server that we have sent everything
-            rclient.beginChecking(ack.token, not args.remote_keepalive)
-
-            if args.remote_keepalive:
-                LOG.info('Server reported the analysis to be over.')
-
+        log_startserver_hint(args)
     except Exception as ex:
         LOG.error(ex)
         import traceback
@@ -569,7 +452,123 @@ def handle_check(args):
                 LOG.debug('Removing temporary log file: ' + log_file)
                 os.remove(log_file)
 
-            if remote and os.path.exists(args.workspace):
+
+def handle_remote(args):
+    """
+    Runs the original build and logs the buildactions.
+    Based on the log runs the analysis on a remote server.
+    """
+
+    LOG.info(''.join(['Using remote check at [',
+                      args.remote_host or '',
+                      ':', str(args.remote_port), ']']))
+
+    log_file = None  # Referenced before assignment...
+    try:
+        if not host_check.check_zlib():
+            sys.exit(1)
+
+        args.workspace = os.path.abspath(args.workspace)
+
+        if not os.path.exists(args.export_plist):
+            os.makedirs(args.export_plist)
+        args.export_plist = os.path.abspath(args.export_plist)
+
+        # In remote mode, connect to the remote daemon
+        # and use a temporary workspace
+        args.workspace = os.path.realpath(util.get_temporary_workspace())
+
+        rclient = daemon_client.RemoteClient(args.remote_host,
+                                             args.remote_port)
+        try:
+            can_run = rclient.pollCheckAvailability(args.name)
+        except Exception as e:
+            LOG.error(e.message)
+            LOG.error("Couldn't initiate remote checking on [{0}:{1}]"
+                      .format(args.remote_host or 'localhost',
+                              args.remote_port))
+            sys.exit(1)
+
+        if not can_run:
+            LOG.error("Server did not accept the request to run '" +
+                      args.name + "'. It is either overloaded or a run " +
+                      "with the given name is already being executed.")
+            sys.exit(1)
+
+        if not os.path.isdir(args.workspace):
+            os.mkdir(args.workspace)
+
+        context = generic_package_context.get_context()
+        context.codechecker_workspace = args.workspace
+
+        log_file, set_in_cmdline = build_manager.check_log_file(args, context)
+
+        if not log_file:
+            LOG.error("Failed to generate compilation command file: " +
+                      log_file)
+            sys.exit(1)
+
+        actions = log_parser.parse_log(log_file,
+                                       args.add_compiler_defaults)
+
+        LOG.debug("Logfile generation was successful in " + log_file)
+
+        try:
+            ack = rclient.initConnection(args.name,
+                                         ' '.join(sys.argv),
+                                         daemon_lib.pack_check_args(args))
+        except Exception as e:
+            LOG.error("Couldn't start uploading data to server: " +
+                      e.message)
+            sys.exit(1)
+
+        if not ack.is_initial:
+            LOG.debug("Generating file transport for modified files "
+                      "and metadata")
+        else:
+            LOG.debug("Generating file transport for all files.")
+
+        # Send the build.json, and other mandatory configuration files,
+        # the source codes and the dependency metadata to the server.
+        args.logfile = log_file
+        initialfiles = daemon_lib.create_initial_file_data(args,
+                                                           actions,
+                                                           ack.is_initial)
+
+        LOG.debug("Sending files to server...")
+        wrongfiles = rclient.sendFileData(ack.token, initialfiles)
+
+        while len(wrongfiles) != 0:
+            LOG.debug(str(len(wrongfiles)) +
+                      " more files reported by server as required.")
+            fds = daemon_lib.create_file_data_from_paths(wrongfiles)
+            wrongfiles = rclient.sendFileData(ack.token, fds)
+
+        LOG.info('All files successfully uploaded to remote server.')
+
+        # Tell the server that we have sent everything
+        rclient.beginChecking(ack.token)
+
+        LOG.info('Server reported analysis to be over...')
+
+        plists = rclient.fetchPlists(ack.token)
+        for plist in plists:
+            with open(os.path.join(args.export_plist, plist.path), 'w') as f:
+                f.write(plist.content)
+
+        rclient.expire(ack.token)
+        LOG.info("Done -- downloaded {0} plists.".format(len(plists)))
+    except Exception as ex:
+        LOG.error(ex)
+        import traceback
+        print(traceback.format_exc())
+    finally:
+        if not args.keep_tmp:
+            if log_file and not set_in_cmdline:
+                LOG.debug('Removing temporary log file: ' + log_file)
+                os.remove(log_file)
+
+            if os.path.exists(args.workspace):
                 shutil.rmtree(args.workspace)
 
 

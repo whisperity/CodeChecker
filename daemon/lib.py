@@ -283,7 +283,12 @@ def handle_checking(run, context, callback=None, LOG=None):
                                    run.args.add_compiler_defaults)
 
     try:
-        analyzer.run_quick_check(run.args, context, actions, export_plist=True)
+        plist_path = os.path.join(run.args.daemon_root, '..', 'results')
+        if not os.path.exists(plist_path):
+            os.mkdir(plist_path)
+
+        analyzer.run_quick_check(run.args, context, actions,
+                                 export_plist_path=plist_path)
     finally:
         run.mark_finished()
 

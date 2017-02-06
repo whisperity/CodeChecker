@@ -41,7 +41,7 @@ class PlistToFile(ResultHandler):
         """
         self.__print_steps = value
 
-    def handle_results(self):
+    def handle_results(self, remove_root=None):
         """This handler copies the plist file into the jailed_root."""
         plist = self.analyzer_result_file
 
@@ -60,8 +60,12 @@ class PlistToFile(ResultHandler):
             return err_code
 
         if err_code == 0:
-            shutil.copy(plist, os.path.join(self.__folder,
-                                            os.path.basename(plist)))
+            with open(os.path.join(self.__folder,
+                                   os.path.basename(plist)), 'w') as output:
+                with open(plist, 'r') as input:
+                    for line in input:
+                        output.write(line.replace(remove_root, ''))
+
             LOG.debug("Exported '" + os.path.basename(plist) + "'")
         else:
             LOG.error('Analyzing %s with %s failed.\n' %

@@ -91,7 +91,17 @@ class RemoteClient(object):
 
     # ------------------------------------------------------------
     @ThriftClientCall
-    def beginChecking(self, token, disconnect_immediately):
+    def beginChecking(self, token):
+        pass
+
+    # ------------------------------------------------------------
+    @ThriftClientCall
+    def fetchPlists(self, token):
+        pass
+
+    # ------------------------------------------------------------
+    @ThriftClientCall
+    def expire(self, token):
         pass
 
     # ------------------------------------------------------------

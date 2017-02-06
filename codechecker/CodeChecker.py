@@ -305,36 +305,114 @@ Build command which is used to build the project.''')
                                        'and pass them to Clang. This is'
                                        'useful when you do cross-compilation.')
 
-        check_parser.add_argument('--remote-host', '--host', '-r',
-                                  dest="remote_host",
-                                  default=argparse.SUPPRESS,
-                                  required=False,
-                                  help='Use a remote daemon available at this'
-                                  ' host to check the project instead of the '
-                                  'local computer')
-
-        check_parser.add_argument('--remote-port', '-p',
-                                  dest="remote_port",
-                                  type=int,
-                                  default=argparse.SUPPRESS,
-                                  required=False,
-                                  help='Use a remote daemon available on this'
-                                  ' port to check the project, instead of a '
-                                  'local instance.')
-
-        check_parser.add_argument('--remote-keep-alive',
-                                  dest="remote_keepalive",
-                                  default=argparse.SUPPRESS,
-                                  action='store_true',
-                                  required=False,
-                                  help='If set, the local command will not '
-                                       'exit until the server reports that '
-                                       'checking has finished.')
-
         add_analyzer_arguments(check_parser)
         add_database_arguments(check_parser)
         logger.add_verbose_arguments(check_parser)
         check_parser.set_defaults(func=arg_handler.handle_check)
+
+        # --------------------------------------
+        # remote check commands
+        remote_parser = subparsers.add_parser('remote',
+                                              formatter_class=ADHF,
+                                              help=''' \
+        Run the supported source code analyzers on a project on a remote \
+        server.''')
+
+        remote_parser.add_argument('-w', '--workspace', type=str,
+                                   default=util.get_default_workspace(),
+                                   dest="workspace",
+                                   help=workspace_help_msg)
+
+        remote_parser.add_argument('-n', '--name', type=str,
+                                   dest="name", required=True,
+                                   default=argparse.SUPPRESS,
+                                   help=name_help_msg)
+
+        rcheckgroup = remote_parser.add_mutually_exclusive_group(required=True)
+
+        rcheckgroup.add_argument('-b', '--build', type=str, dest="command",
+                                 default=argparse.SUPPRESS,
+                                 required=False, help='''\
+        Build command which is used to build the project.''')
+
+        rcheckgroup.add_argument('-l', '--log', type=str, dest="logfile",
+                                 default=argparse.SUPPRESS,
+                                 required=False,
+                                 help=log_argument_help_msg)
+
+        remote_parser.add_argument('-j', '--jobs', type=int, dest="jobs",
+                                   default=1, required=False,
+                                   help=jobs_help_msg)
+
+        remote_parser.add_argument('-u', '--suppress', type=str,
+                                   dest="suppress",
+                                   default=argparse.SUPPRESS,
+                                   required=False,
+                                   help=suppress_help_msg)
+        remote_parser.add_argument('-c', '--clean',
+                                   default=argparse.SUPPRESS,
+                                   action=DeprecatedOptionAction)
+
+        remote_parser.add_argument('--update', action=DeprecatedOptionAction,
+                                   dest="update", default=False, required=False,
+                                   help="Incremental parsing, update the "
+                                        "results of a previous run. "
+                                        "Only the files changed since the last "
+                                        "build will be reanalyzed. Depends on"
+                                        " the build system.")
+
+        remote_parser.add_argument('--force', action="store_true",
+                                   dest="force", default=False, required=False,
+                                   help="Delete analysis results form the "
+                                        "database if a run with the "
+                                        "given name already exists.")
+
+        remote_parser.add_argument('-s', '--skip', type=str, dest="skipfile",
+                                   default=argparse.SUPPRESS,
+                                   required=False, help='Path to skip file.')
+
+        remote_parser.add_argument('--quiet-build',
+                                   action='store_true',
+                                   default=False,
+                                   required=False,
+                                   help='Do not print out the output of the '
+                                        'original build.')
+
+        remote_parser.add_argument('--add-compiler-defaults',
+                                   action='store_true',
+                                   default=False,
+                                   required=False,
+                                   help='Fetch built in compiler include'
+                                        'paths and defines '
+                                        'and pass them to Clang. This is'
+                                        'useful when you do cross-compilation.')
+
+        remote_parser.add_argument('--remote-host', '--host', '-r',
+                                   dest="remote_host",
+                                   default="localhost",
+                                   required=False,
+                                   help='Use a remote daemon available at this'
+                                        ' host to check the project instead of'
+                                        ' the local computer')
+
+        remote_parser.add_argument('--remote-port', '-p',
+                                   dest="remote_port",
+                                   type=int,
+                                   default=8002,
+                                   required=False,
+                                   help='Use a remote daemon available on this'
+                                        ' port to check the project, instead '
+                                        ' of a local instance.')
+
+        remote_parser.add_argument('--export-plist',
+                                   type=str,
+                                   required=True,
+                                   help='Export the generated plist files '
+                                        'to the specified directory.')
+
+        add_analyzer_arguments(remote_parser)
+        logger.add_verbose_arguments(remote_parser)
+        remote_parser.set_defaults(func=arg_handler.handle_remote)
 
         # --------------------------------------
         # QuickCheck commands.

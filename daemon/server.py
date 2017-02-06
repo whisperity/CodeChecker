@@ -9,15 +9,14 @@ from __future__ import unicode_literals
 
 from argparse import Namespace
 import atexit
-import datetime
+from datetime import datetime
 import errno
 import hashlib
 import json
-import ntpath
 import os
-import time
 import threading
 import socket
+import shutil
 import sys
 
 import shared
@@ -30,12 +29,10 @@ from thrift.transport import TSocket
 from thrift.transport import TTransport
 
 from codechecker_lib.analyzers import analyzer_types
-from codechecker_lib import database_handler
 from codechecker_lib import generic_package_context
 from codechecker_lib.logger import LoggerFactory
 from codechecker_lib import instance_manager
 from codechecker_lib import util
-from db_model.orm_model import *
 
 from . import lib as daemon_lib
 
@@ -65,7 +62,7 @@ class RemoteHandler(object):
                                                     run_name,
                                                     self.lock_created])[0:8]
 
-            file_root = os.path.join(self.workspace, run_name)
+            file_root = os.path.join(self.workspace, run_name, 'file-root')
             self.args = Namespace(
                 # Mandatory field for indicating that the checking does
                 # NOT take place on a local machine!
@@ -102,6 +99,9 @@ class RemoteHandler(object):
         def mark_finished(self):
             if self.is_running():
                 self.__state = RemoteHandler.RunLock.RunStates.DONE
+
+        def is_done(self):
+            return self.__state == RemoteHandler.RunLock.RunStates.DONE
 
     def pollCheckAvailability(self, run_name):
         """
@@ -159,7 +159,7 @@ class RemoteHandler(object):
             lock_object.args.daemon_root)
         if first_connection_for_run:
             LOG.debug("Creating run folder at " + lock_object.args.daemon_root)
-            os.mkdir(lock_object.args.daemon_root)
+            os.makedirs(lock_object.args.daemon_root)
 
         self._running_checks[run_name] = lock_object
 
@@ -230,7 +230,7 @@ class RemoteHandler(object):
 
         return files_need_send
 
-    def beginChecking(self, token, disconnect_immediately):
+    def beginChecking(self, token):
         """Starts the checking on the daemon host."""
 
         def _end_check_callback(self, run_object):
@@ -238,9 +238,6 @@ class RemoteHandler(object):
                       format(run_object.get_persistent_token(),
                              run_object.run_name))
             run_object.mark_finished()
-            del self._running_checks[run_object.run_name]
-
-            # self.session.commit()
 
         run = self._get_run(token)
         if not run:
@@ -263,17 +260,64 @@ class RemoteHandler(object):
 
         check_process.start()
 
-        if not disconnect_immediately:
-            # If the user wants to wait for the checking to finish,
-            # then we shall wait
-            LOG.debug('Check running. Keeping connection alive '
-                      'until check is over...')
-            check_process.join()
-        else:
-            LOG.debug('User did not request keep-alive. Goodbye!')
+        LOG.debug('Check running. Keeping connection alive '
+                  'until check is over...')
+        check_process.join()
+
+    def fetchPlists(self, token):
+        """Retrieve plist files (analysis results) from the server."""
+
+        run = self._get_run(token)
+        if not run:
+            LOG.error("Client commanded to fetch plist for #" + token +
+                      " but such run does not exist!")
+            raise shared.ttypes.RequestFailed(
+                shared.ttypes.ErrorCode.GENERAL,
+                str("No run with the given token."))
+
+        if not run.is_done():
+            raise shared.ttypes.RequestFailed(
+                shared.ttypes.ErrorCode.GENERAL,
+                str("The requested analysis is not done yet..."))
+
+        retval = []
+        plist_folder = os.path.join(run.args.daemon_root, '..', 'results')
+        for _, _, plists in os.walk(plist_folder):
+            for plist in plists:
+                with open(os.path.join(plist_folder, plist), 'r') as data:
+                    retval.append(FileData(os.path.basename(plist),
+                                           "",
+                                           data.read()))
+
+        return retval
+
+    def expire(self, token):
+        """
+        Remove a run with the given token from the storage of running checks.
+        """
+
+        run = self._get_run(token)
+        if not run:
+            LOG.error("Client commanded to fetch plist for #" + token +
+                      " but such run does not exist!")
+            raise shared.ttypes.RequestFailed(
+                shared.ttypes.ErrorCode.GENERAL,
+                str("No run with the given token."))
+
+        if not run.is_done():
+            raise shared.ttypes.RequestFailed(
+                shared.ttypes.ErrorCode.GENERAL,
+                str("The requested analysis is not done yet..."))
+
+        del self._running_checks[run.run_name]
+
+        plist_path = os.path.join(run.args.daemon_root, '..', 'results')
+        if os.path.exists(plist_path):
+            shutil.rmtree(plist_path)
 
     def getCheckerList(self, args_json):
         """Retrieve the list of checkers available on the server."""
+
         args = json.loads(args_json)
         args = Namespace(
             analyzers=args['analyzers']
@@ -289,37 +333,23 @@ class RemoteHandler(object):
 
         return checker_records
 
-    def __init__(self, context, session, max_runs, max_jobs_per_run):
+    def __init__(self, context, max_runs, max_jobs_per_run):
         self._running_checks = {}
         self.context = context
         self.workspace = context.codechecker_workspace
-        # self.session = session
         self.max_runs = max_runs
         self.max_jobs = max_jobs_per_run
 
 
-def run_server(args, db_uri, context, callback_event=None):
+def run_server(args, context, callback_event=None):
     host = args.host
     port = args.port
     LOG.debug('Starting CodeChecker daemon ...')
 
-    session = None
-    # try:
-    #     engine = database_handler.SQLServer.create_engine(db_uri)
-    #
-    #     LOG.debug('Creating new database session.')
-    #     session = CreateSession(engine)
-    #
-    # except sqlalchemy.exc.SQLAlchemyError as alch_err:
-    #     LOG.error(str(alch_err))
-    #     sys.exit(1)
-    #
-    # session.autoflush = False  # Autoflush is enabled by default.
-
     LOG.debug('Starting thrift server.')
     try:
         # Start thrift server.
-        handler = RemoteHandler(context, session, args.runs, args.jobs)
+        handler = RemoteHandler(context, args.runs, args.jobs)
 
         processor = RemoteChecking.Processor(handler)
         transport = TSocket.TServerSocket(host=host, port=port)
@@ -349,7 +379,6 @@ def run_server(args, db_uri, context, callback_event=None):
             callback_event.set()
         LOG.debug('Starting to serve.')
         server.serve()
-        session.commit()
     except socket.error as sockerr:
         LOG.error(str(sockerr))
         if sockerr.errno == errno.EADDRINUSE:
@@ -357,5 +386,4 @@ def run_server(args, db_uri, context, callback_event=None):
         sys.exit(1)
     except Exception as err:
         LOG.error(str(err))
-        session.commit()
         sys.exit(1)

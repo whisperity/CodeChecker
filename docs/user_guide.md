@@ -119,8 +119,6 @@ usage: CodeChecker check [-h] [-w WORKSPACE] -n NAME (-b COMMAND | -l LOGFILE)
                          [-j JOBS] [-u SUPPRESS] [-c [DEPRECATED]]
                          [--update [DEPRECATED]] [--force] [-s SKIPFILE]
                          [--quiet-build] [--add-compiler-defaults]
-                         [--remote-host REMOTE_HOST]
-                         [--remote-port REMOTE_PORT] [--remote-keep-alive]
                          [-e ENABLE] [-d DISABLE] [--keep-tmp]
                          [--analyzers ANALYZERS [ANALYZERS ...]]
                          [--saargs CLANGSA_ARGS_CFG_FILE]
@@ -170,14 +168,6 @@ optional arguments:
                         Fetch built in compiler includepaths and defines and
                         pass them to Clang. This isuseful when you do cross-
                         compilation. (default: False)
-  --remote-host REMOTE_HOST, --host REMOTE_HOST, -r REMOTE_HOST
-                        Use a remote daemon available at this host to check
-                        the project instead of the local computer
-  --remote-port REMOTE_PORT, -p REMOTE_PORT
-                        Use a remote daemon available on this port to check
-                        the project, instead of a local instance.
-  --remote-keep-alive   If set, the local command will not exit until the
-                        server reports that checking has finished.
   -e ENABLE, --enable ENABLE
                         Enable checker.
   -d DISABLE, --disable DISABLE
@@ -365,19 +355,6 @@ CodeChecker check -e core -e security -d alpha ...
 ~~~~~~~~~~~~~~~~~~~~~
 CodeChecker will execute analysis on as many threads as specified after -j argument.
 
-### Remote checking
-~~~~~~~~~~~~~~~~~~~~~
-  --remote-host REMOTE_HOST, --host REMOTE_HOST, -r REMOTE_HOST
-                        Use a remote daemon available at this host to check
-                        the project instead of the local computer
-  --remote-port REMOTE_PORT, -p REMOTE_PORT
-                        Use a remote daemon available on this port to check
-                        the project, instead of a local instance.
-  --remote-keep-alive   If set, the local command will not exit until the
-                        server reports that checking has finished.
-~~~~~~~~~~~~~~~~~~~~~
-Specify the daemon server to use as analysis host. Read more about [daemon
-mode](docs/daemon.md).
 
 ### Various deployment possibilities
 
