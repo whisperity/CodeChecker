@@ -133,6 +133,7 @@ def create_file_data_from_paths(path_list):
     Reads the files specified by path_list and creates a FileData list
     by reading and hashing these files to send them to the server.
     """
+
     fds = []
     for f in path_list:
         with open(f, 'r') as sf:
@@ -144,6 +145,11 @@ def create_file_data_from_paths(path_list):
 
 
 def _fix_compile_json(json, file_root):
+    """
+    Fixup the compile_commands.json file to ensure that source and include
+    files are loaded from the "virtual root" of the remote run.
+    """
+
     if 'CC_LOGGER_GCC_LIKE' not in os.environ:
         os.environ['CC_LOGGER_GCC_LIKE'] = 'gcc:g++:clang:clang++:cc:c++'
 
@@ -240,6 +246,10 @@ def unpack_check_fileargs(args, file_root):
 
 
 def handle_checking(run, context, callback=None, LOG=None):
+    """"
+    Actually execute the analysis on a project.
+    """
+
     # Before the log-file parsing can continue, we must first "hackfix" the
     # log file so that it uses the paths under daemon_root, not the paths on
     # the client's computer.

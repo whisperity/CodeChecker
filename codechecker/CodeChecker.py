@@ -22,6 +22,7 @@ from codechecker_lib import arg_handler
 from codechecker_lib import util
 from codechecker_lib import logger
 from codechecker_lib.logger import LoggerFactory
+from codechecker_lib import instance_manager
 from codechecker_lib.analyzers import analyzer_types
 
 LOG = LoggerFactory.get_new_logger('MAIN')
@@ -146,16 +147,6 @@ def add_analyzer_arguments(parser):
                         help="File with arguments which will be forwarded"
                         " directly to the Clang tidy analyzer"
                         " without modification.")
-
-
-def add_verbose_arguments(parser):
-    """
-    Verbosity level arguments.
-    """
-    parser.add_argument('--verbose', type=str, dest='verbose',
-                        choices=['info', 'debug', 'debug_analyzer'],
-                        default='info',
-                        help='Set verbosity level.')
 
 
 # -----------------------------------------------------------------------------
@@ -545,26 +536,6 @@ Build command which is used to build the project.''')
                                    default=util.get_default_workspace(),
                                    help=workspace_help_msg)
 
-        server_parser.add_argument('-l', '--list',
-                                   action='store_true',
-                                   dest="list",
-                                   required=False,
-                                   help='List servers started by your user.')
-
-        server_parser.add_argument('-s', '--stop',
-                                   action='store_true',
-                                   dest="stop",
-                                   required=False,
-                                   help='Stops the server associated with '
-                                        'the given view-port and workspace.')
-
-        server_parser.add_argument('--stop-all',
-                                   action='store_true',
-                                   dest="stop_all",
-                                   required=False,
-                                   help='Stops all of your running '
-                                        'CodeChecker instances.')
-
         server_parser.add_argument('-v', '--view-port', type=int,
                                    dest="view_port",
                                    default=8001, required=False,
@@ -591,6 +562,7 @@ Build command which is used to build the project.''')
 
         add_database_arguments(server_parser)
         logger.add_verbose_arguments(server_parser)
+        instance_manager.add_instance_arguments(server_parser)
         server_parser.set_defaults(func=arg_handler.handle_server)
 
         # --------------------------------------
@@ -626,28 +598,9 @@ Build command which is used to build the project.''')
                                                         ' jobs PER RUN that '
                                                         'can be executing.')
 
-        daemon_parser.add_argument('-l', '--list',
-                                   action='store_true',
-                                   dest="list",
-                                   required=False,
-                                   help='List daemons started by your user.')
-
-        daemon_parser.add_argument('-s', '--stop',
-                                   action='store_true',
-                                   dest="stop",
-                                   required=False,
-                                   help='Stops the daemon associated with '
-                                        'the given view-port and workspace.')
-
-        daemon_parser.add_argument('--stop-all',
-                                   action='store_true',
-                                   dest="stop_all",
-                                   required=False,
-                                   help='Stops all of your running '
-                                        'CodeChecker daemons.')
-
         add_database_arguments(daemon_parser)
-        add_verbose_arguments(daemon_parser)
+        logger.add_verbose_arguments(daemon_parser)
+        instance_manager.add_instance_arguments(daemon_parser)
         daemon_parser.set_defaults(func=arg_handler.handle_daemon)
 
         # --------------------------------------

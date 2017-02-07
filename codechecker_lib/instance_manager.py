@@ -8,6 +8,7 @@ Instance manager handles the state keeping of running CodeChecker instances
 for a particular user on the local machine.
 """
 
+import argparse
 import getpass
 import json
 import os
@@ -120,3 +121,30 @@ def list(kind=None):
             portalocker.unlock(f)
 
     return instances
+
+
+def add_instance_arguments(parser):
+    """Add instance manager arguments to the given argparser."""
+
+    parser.add_argument('-l', '--list',
+                        action='store_true',
+                        dest="list",
+                        required=False,
+                        default=argparse.SUPPRESS,
+                        help='List servers started by your user.')
+
+    parser.add_argument('-s', '--stop',
+                        action='store_true',
+                        dest="stop",
+                        required=False,
+                        default=argparse.SUPPRESS,
+                        help='Stops the server associated with '
+                             'the given view-port and workspace.')
+
+    parser.add_argument('--stop-all',
+                        action='store_true',
+                        dest="stop_all",
+                        required=False,
+                        default=argparse.SUPPRESS,
+                        help='Stops all of your running '
+                             'CodeChecker instances.')

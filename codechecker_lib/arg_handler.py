@@ -101,31 +101,36 @@ def handle_list_checkers(args):
             print(' - {0:50} {1}'.format(checker_name, description))
 
 
-def handle_server(args):
-    """
-    Starts the report viewer server.
-    """
-    if not host_check.check_zlib():
-        sys.exit(1)
+def _handle_instancemgr_args(subcommand, args, workspace, port_title='Port'):
+    """Handle CodeChecker server/daemon --list/--stop/--stop-all"""
 
-    workspace = args.workspace
+    # Set up some defaults suppressed by the argparser.
+    if 'list' not in args:
+        args.list = False
+    if 'stop' not in args:
+        args.stop = False
+    if 'stop_all' not in args:
+        args.stop_all = False
 
-    if (args.list or args.stop or args.stop_all) and \
-            not (args.list ^ args.stop ^ args.stop_all):
-        print("CodeChecker server: error: argument -l/--list and -s/--stop"
-              "and --stop-all are mutually exclusive.")
+    if not (args.list or args.stop or args.stop_all):
+        # If neither is specified, don't do anything in this method.
+        return
+
+    if not (args.list ^ args.stop ^ args.stop_all):
+        print("CodeChecker {0}: error: argument -l/--list and -s/--stop"
+              "and --stop-all are mutually exclusive.".format(subcommand))
         sys.exit(2)
 
     if args.list:
-        instances = instance_manager.list('server')
+        instances = instance_manager.list(subcommand)
 
         instances_on_multiple_hosts = any(True for inst in instances
                                           if inst['hostname'] !=
                                           socket.gethostname())
         if not instances_on_multiple_hosts:
-            rows = [('Workspace', 'View port')]
+            rows = [('Workspace', port_title)]
         else:
-            rows = [('Workspace', 'Computer host', 'View port')]
+            rows = [('Workspace', 'Computer host', port_title)]
 
         for instance in instances:
             if not instances_on_multiple_hosts:
@@ -141,7 +146,7 @@ def handle_server(args):
         util.print_table(rows)
         sys.exit(0)
     elif args.stop or args.stop_all:
-        for i in instance_manager.list('server'):
+        for i in instance_manager.list(subcommand):
             # A STOP only stops the server associated with the given workspace
             # and view-port.
             if i['hostname'] != socket.gethostname() or (
@@ -152,14 +157,26 @@ def handle_server(args):
 
             try:
                 util.kill_process_tree(i['pid'])
-                LOG.info("Stopped CodeChecker server running on port {0} "
+                LOG.info("Stopped CodeChecker {3} running on port {0} "
                          "in workspace {1} (PID: {2})".
-                         format(i['port'], i['workspace'], i['pid']))
+                         format(i['port'], i['workspace'], i['pid'],
+                                subcommand))
             except:
                 # Let the exception come out if the commands fail
                 LOG.error("Couldn't stop process PID #" + str(i['pid']))
                 raise
         sys.exit(0)
+
+
+def handle_server(args):
+    """
+    Starts the report viewer server.
+    """
+    if not host_check.check_zlib():
+        sys.exit(1)
+
+    workspace = args.workspace
+    _handle_instancemgr_args('server', args, workspace, 'View port')
 
     # WARNING
     # In case of SQLite args.dbaddress default value is used
@@ -251,57 +268,7 @@ def handle_daemon(args):
         # in args set the default value.
         workspace = util.get_default_workspace()
 
-    if (args.list or args.stop or args.stop_all) and \
-            not (args.list ^ args.stop ^ args.stop_all):
-        print("CodeChecker daemon: error: argument -l/--list and -s/--stop"
-              "and --stop-all are mutually exclusive.")
-        sys.exit(2)
-
-    if args.list:
-        instances = instance_manager.list('daemon')
-
-        instances_on_multiple_hosts = any(True for inst in instances
-                                          if inst['hostname'] !=
-                                          socket.gethostname())
-
-        if not instances_on_multiple_hosts:
-            rows = [('Workspace', 'Daemon port')]
-        else:
-            rows = [('Workspace', 'Computer host', 'Daemon port')]
-
-        for instance in instances:
-            if not instances_on_multiple_hosts:
-                rows.append((instance['workspace'], str(instance['port'])))
-            else:
-                rows.append((instance['workspace'],
-                             instance['hostname']
-                             if instance['hostname'] != socket.gethostname()
-                             else '',
-                             str(instance['port'])))
-
-        print("Your running CodeChecker daemons:")
-        util.print_table(rows)
-        sys.exit(0)
-    elif args.stop or args.stop_all:
-        for i in instance_manager.list('daemon'):
-            # A STOP only stops the server associated with the given workspace
-            # and view-port.
-            if i['hostname'] != socket.gethostname() or (
-                        args.stop and not (i['port'] == args.view_port and
-                                           os.path.abspath(i['workspace']) ==
-                                           os.path.abspath(workspace))):
-                continue
-
-            try:
-                util.kill_process_tree(i['pid'])
-                LOG.info("Stopped CodeChecker daemon running on port {0} "
-                         "in workspace {1} (PID: {2})".
-                         format(i['port'], i['workspace'], i['pid']))
-            except:
-                # Let the exception come out if the commands fail
-                LOG.error("Couldn't stop process PID #" + str(i['pid']))
-                raise
-        sys.exit(0)
+    _handle_instancemgr_args('daemon', args, workspace, 'Daemon port')
 
     # WARNING
     # In case of SQLite args.dbaddress default value is used
