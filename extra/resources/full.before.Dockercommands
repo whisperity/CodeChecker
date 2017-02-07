@@ -1,0 +1,14 @@
+#####################
+# This script installs the additional "full environment" modules:
+#  - Additional system libs and executables
+#
+# Set up BEFORE CodeChecker is deployed in the image
+#####################
+#
+# This is a TEMPLATE, not to be called directly.
+
+RUN apt-get install --no-install-recommends -y \
+      libpq-dev \
+      postgresql \
+      postgresql-client-common \
+      postgresql-common

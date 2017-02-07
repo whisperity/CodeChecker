@@ -5,6 +5,8 @@
 # Executing this step requires the CodeChecker source code to be available
 # under ~/codechecker_src!
 #
+# Set up AFTER CodeChecker is deployed in the image
+#
 # This code does NOT install a runnable CodeChecker package.
 #####################
 

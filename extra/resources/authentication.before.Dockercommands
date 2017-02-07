@@ -2,7 +2,8 @@
 # This script installs the additional "authentication" modules into a
 # previously checked out CodeChecker folder:
 #  - Additional system libs and executables
-#  - Additional Python modules
+#
+# Set up BEFORE CodeChecker is deployed in the image
 #####################
 #
 # This is a TEMPLATE, not to be called directly.
@@ -11,5 +12,3 @@ RUN apt-get install --no-install-recommends -y \
       libldap2-dev \
       libsasl2-dev \
       libssl-dev
-
-RUN pip install -r ~/codechecker_src/.ci/auth_requirements
