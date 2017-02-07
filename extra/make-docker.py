@@ -276,7 +276,7 @@ print("\nDone setting up Dockerfile.")
 print("---------------- BEGIN DOCKERFILE ----------------")
 with open('Dockerfile', 'r') as dockerfile:
     print(dockerfile.read())
-print("----------------  END DOCKERFILE ----------------")
+print("----------------  END  DOCKERFILE ----------------")
 
 
 if not args.dry_run:
