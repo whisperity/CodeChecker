@@ -281,9 +281,22 @@ def handle_daemon(args):
         # Check if a proper Docker image exists
         try:
             res = subprocess.check_output(['docker', 'run',
-                                           '--rm', 'codechecker'])
+                                           '--rm',
 
-            if res != "CODECHECKER_DAEMON_ANALYZER_READY":
+                                           '--volume',
+                                           "/home/ericsza/CodeChecker/install"
+                                           "/CodeChecker:/root/CodeChecker",
+
+                                           '--entrypoint',
+                                           "/root/CodeChecker/bin/CodeChecker",
+
+                                           'codechecker',
+
+                                           "override",
+                                           "daemon-run-analysis",
+                                           "docker-status"])
+
+            if res.strip('\n') != "CODECHECKER_DAEMON_ANALYZER_READY":
                 LOG.error("The Docker container didn't respond properly.\n"
                           "Make sure you created az --install image and "
                           "that it is named 'codechecker'!")
@@ -310,8 +323,7 @@ def handle_daemon(args):
                                      args=(
                                          args,
                                          context,
-                                         is_server_started,
-                                         args.docker))
+                                         is_server_started))
 
     server.start()
 
@@ -711,3 +723,21 @@ def handle_version_info(args):
     from codeCheckerDBAccess import constants
     print(('Thrift client api version: \t' + constants.API_VERSION).
           expandtabs(30))
+
+
+def handle_override(argv):
+    """
+    Handle the 'CodeChecker override' command.
+    HACK: This is used because environment saving requires too much work atm.
+    """
+
+    if len(argv) < 2:
+        LOG.error("Invalid override arg list")
+        sys.exit(1)
+
+    action = argv[2]  # The action subcommand for the override subcommand
+    argv = argv[3:]  # Extra arguments for the action
+
+    if action == 'daemon-run-analysis':
+        from daemon import run_analysis
+        run_analysis.__main__(argv)

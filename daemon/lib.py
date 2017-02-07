@@ -233,21 +233,21 @@ def unpack_check_args(args, args_json):
             setattr(args, key, data[key])
 
 
-def unpack_check_fileargs(args, file_root):
+def unpack_check_fileargs(args, daemon_root):
     """
     Unpacks the FILES_TO_ALWAYS_UPLOAD keys into the given args Namespace
     if the specified files exists in the file_root.
     """
 
     for argvar, filename in FILES_TO_ALWAYS_UPLOAD.iteritems():
-        if os.path.exists(os.path.join(file_root, filename)) and \
+        if os.path.exists(os.path.join(daemon_root, filename)) and \
                 argvar not in args.__dict__:
-            setattr(args, argvar, os.path.join(file_root, filename))
+            setattr(args, argvar, os.path.join(daemon_root, filename))
 
 
-def handle_checking(run, context, callback=None, LOG=None):
-    """"
-    Actually execute the analysis on a project.
+def prepare_checking(run, context, LOG=None):
+    """
+    Prepares the project for analysis.
     """
 
     # Before the log-file parsing can continue, we must first "hackfix" the
@@ -261,7 +261,9 @@ def handle_checking(run, context, callback=None, LOG=None):
     with open(fixed_file, 'w') as outf:
         with open(run.args.logfile, 'r+') as inf:
             commands = json.load(inf)
-            commands = _fix_compile_json(commands, run.args.daemon_root)
+            commands = _fix_compile_json(commands,
+                                         os.path.join(run.args.daemon_root,
+                                                      'file-root'))
             json.dump(commands, outf,
                       indent=(4 if LOG.level == logging.DEBUG
                               or LOG.level == logging.DEBUG_ANALYZER
@@ -289,14 +291,22 @@ def handle_checking(run, context, callback=None, LOG=None):
                   log_file)
         sys.exit(1)
 
-    actions = log_parser.parse_log(log_file,
+    run.args.logfile = log_file
+
+
+def handle_checking(run, context, callback=None, LOG=None):
+    """"
+    Actually execute the analysis on a project.
+    """
+
+    actions = log_parser.parse_log(run.args.logfile,
                                    run.args.add_compiler_defaults)
 
-    try:
-        plist_path = os.path.join(run.args.daemon_root, '..', 'results')
-        if not os.path.exists(plist_path):
-            os.mkdir(plist_path)
+    plist_path = os.path.join(run.args.daemon_root, 'results')
+    if not os.path.exists(plist_path):
+        os.mkdir(plist_path)
 
+    try:
         analyzer.run_quick_check(run.args, context, actions,
                                  export_plist_path=plist_path)
     finally:

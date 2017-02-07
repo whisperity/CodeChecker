@@ -62,7 +62,7 @@ class RemoteHandler(object):
                                                     run_name,
                                                     self.lock_created])[0:8]
 
-            file_root = os.path.join(self.workspace, run_name, 'file-root')
+            file_root = os.path.join(self.workspace, run_name)
             self.args = Namespace(
                 # Mandatory field for indicating that the checking does
                 # NOT take place on a local machine!
@@ -160,6 +160,8 @@ class RemoteHandler(object):
         if first_connection_for_run:
             LOG.debug("Creating run folder at " + lock_object.args.daemon_root)
             os.makedirs(lock_object.args.daemon_root)
+            os.makedirs(os.path.join(lock_object.args.daemon_root,
+                                     'file-root'))
 
         self._running_checks[run_name] = lock_object
 
@@ -188,15 +190,24 @@ class RemoteHandler(object):
         LOG.info("Received " + str(len(files)) +
                  " file data for run '" + run.run_name + "'")
 
+        file_root = os.path.join(run.args.daemon_root, 'file-root')
         files_need_send = []
         for fd in files:
             # Twist the path so it refers to a place under the
             # workspace/runname folder.
             client_path = fd.path
             if os.path.isabs(client_path):
+                # Files that begin with / must be checked into the file-root,
+                # the remote 'mirror' of the neccessary local storage.
+                #
                 # TODO: This won't work under Windows!
+                #
                 client_path = client_path.lstrip('/')
-            local_path = os.path.join(run.args.daemon_root, client_path)
+                local_path = os.path.join(file_root, client_path)
+            else:
+                # Files that don't begin with / go into the config folder
+                # of the run being executed.
+                local_path = os.path.join(run.args.daemon_root, client_path)
 
             # We also need to check if the proper directory structure exists
             if not os.path.exists(os.path.dirname(local_path)):
@@ -250,19 +261,75 @@ class RemoteHandler(object):
         daemon_lib.unpack_check_fileargs(run.args, run.args.daemon_root)
         run.mark_running()
 
-        check_process = threading.Thread(
-            target=daemon_lib.handle_checking,
-            args=(
-                run,
-                self.context,
-                lambda: _end_check_callback(self, run),
-                LOG))
+        if not self.docker:
+            daemon_lib.prepare_checking(run, self.context, LOG)
 
-        check_process.start()
+            LOG.debug("Starting analysis in local thread...")
 
-        LOG.debug('Check running. Keeping connection alive '
-                  'until check is over...')
-        check_process.join()
+            check_process = threading.Thread(
+                target=daemon_lib.handle_checking,
+                args=(
+                    run,
+                    self.context,
+                    lambda: _end_check_callback(self, run),
+                    LOG))
+
+            check_process.start()
+
+            LOG.debug('Check running. Keeping connection alive '
+                      'until check is over...')
+            check_process.join()
+        else:  # TODO
+            host_root = run.args.daemon_root
+            run.args.daemon_root = "/var/CodeChecker"
+            daemon_lib.prepare_checking(run, self.context, LOG)
+
+            run_config = os.path.join(host_root, 'docker.runconfig')
+            LOG.info("Writing prepared run configuration into '{0}'"
+                     .format(run_config))
+
+            with open(run_config, 'w') as cfgfile:
+                str = json.dumps(run.args.__dict__, indent=2)
+                str = str.replace(host_root, run.args.daemon_root)
+                cfgfile.write(str)
+                LOG.debug(str)
+
+            import subprocess
+            run_config = os.path.join(run.args.daemon_root, 'docker.runconfig')
+            subprocess.call(['docker', 'run',
+
+                             # Remove container after run
+                             '--rm',
+
+                             '-ti',
+
+                             # TODO: HACK: Please use a built and installed CC image
+                             '--volume',
+                             "/home/ericsza/CodeChecker/install"
+                             "/CodeChecker:/root/CodeChecker",
+
+                             # Mount the file root as a volume
+                             '--volume',
+                             host_root + ":" + run.args.daemon_root,
+
+                             # Override so we run the CodeChecker inside
+                             '--entrypoint',
+                             "/root/CodeChecker/bin/CodeChecker",
+                             #"/bin/bash",
+
+                             'codechecker',
+
+                             # CodeChecker args
+                             "override", "daemon-run-analysis",
+                             "--workspace", run.args.daemon_root,
+                             "--name", run.run_name,
+                             "--args-json",
+                             os.path.abspath(run_config)
+                             ])
+
+            # Switch back the run config as execution comes back to the host
+            run.args.daemon_root = host_root
+            run.mark_finished()
 
     def fetchPlists(self, token):
         """Retrieve plist files (analysis results) from the server."""
@@ -281,7 +348,7 @@ class RemoteHandler(object):
                 str("The requested analysis is not done yet..."))
 
         retval = []
-        plist_folder = os.path.join(run.args.daemon_root, '..', 'results')
+        plist_folder = os.path.join(run.args.daemon_root, 'results')
         for _, _, plists in os.walk(plist_folder):
             for plist in plists:
                 with open(os.path.join(plist_folder, plist), 'r') as data:
@@ -311,9 +378,9 @@ class RemoteHandler(object):
 
         del self._running_checks[run.run_name]
 
-        plist_path = os.path.join(run.args.daemon_root, '..', 'results')
-        if os.path.exists(plist_path):
-            shutil.rmtree(plist_path)
+        # plist_path = os.path.join(run.args.daemon_root, 'results')
+        # if os.path.exists(plist_path):
+        #   shutil.rmtree(plist_path)
 
     def getCheckerList(self, args_json):
         """Retrieve the list of checkers available on the server."""
@@ -333,15 +400,16 @@ class RemoteHandler(object):
 
         return checker_records
 
-    def __init__(self, context, max_runs, max_jobs_per_run):
+    def __init__(self, context, max_runs, max_jobs_per_run, dockerise):
         self._running_checks = {}
         self.context = context
         self.workspace = context.codechecker_workspace
         self.max_runs = max_runs
         self.max_jobs = max_jobs_per_run
+        self.docker = dockerise
 
 
-def run_server(args, context, callback_event=None, dockerise=False):
+def run_server(args, context, callback_event=None):
     host = args.host
     port = args.port
     LOG.debug('Starting CodeChecker daemon ...')
@@ -349,7 +417,7 @@ def run_server(args, context, callback_event=None, dockerise=False):
     LOG.debug('Starting thrift server.')
     try:
         # Start thrift server.
-        handler = RemoteHandler(context, args.runs, args.jobs)
+        handler = RemoteHandler(context, args.runs, args.jobs, args.docker)
 
         processor = RemoteChecking.Processor(handler)
         transport = TSocket.TServerSocket(host=host, port=port)

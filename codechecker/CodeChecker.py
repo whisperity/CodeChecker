@@ -166,6 +166,13 @@ def main():
     signal.signal(signal.SIGTERM, signal_handler)
 
     try:
+        # Re-route custom entry points under 'override'
+        # TODO: HACK: Emulating the environment saving requires more
+        # TODO:       understanding as of now
+        if len(sys.argv) >= 3 and sys.argv[1] == "override":
+            arg_handler.handle_override(sys.argv)
+            return
+
         parser = argparse.ArgumentParser(
             prog='CodeChecker',
             formatter_class=argparse.RawDescriptionHelpFormatter,
@@ -605,7 +612,7 @@ Build command which is used to build the project.''')
                                    help='Run the analysis in a Docker '
                                         'container instance. (If not '
                                         'specified, analysis runs in a '
-                                        'normal subprocess.)')
+                                        'normal thread.)')
 
         add_database_arguments(daemon_parser)
         logger.add_verbose_arguments(daemon_parser)
