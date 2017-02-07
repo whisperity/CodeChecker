@@ -14,6 +14,7 @@ import os
 import psutil
 import socket
 import shutil
+import subprocess
 import sys
 import tempfile
 import time
@@ -274,6 +275,27 @@ def handle_daemon(args):
     # In case of SQLite args.dbaddress default value is used
     # for which the is_localhost should return true.
 
+    if args.docker:
+        LOG.info("Starting daemon with analyses running in a Docker instance.")
+
+        # Check if a proper Docker image exists
+        try:
+            res = subprocess.check_output(['docker', 'run',
+                                           '--rm', 'codechecker'])
+
+            if res != "CODECHECKER_DAEMON_ANALYZER_READY":
+                LOG.error("The Docker container didn't respond properly.\n"
+                          "Make sure you created az --install image and "
+                          "that it is named 'codechecker'!")
+                LOG.info("The output was: \n" + res)
+                sys.exit(1)
+        except OSError:
+            LOG.error("Docker does not seem to be installed on the system!")
+            sys.exit(1)
+        except subprocess.CalledProcessError:
+            LOG.error("The initial test for the Docker image didn't conclude.")
+            sys.exit(1)
+
     local_db = util.is_localhost(args.dbaddress)
     if local_db and not os.path.exists(workspace):
         os.makedirs(workspace)
@@ -288,7 +310,8 @@ def handle_daemon(args):
                                      args=(
                                          args,
                                          context,
-                                         is_server_started))
+                                         is_server_started,
+                                         args.docker))
 
     server.start()
 

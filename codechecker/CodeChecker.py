@@ -598,6 +598,15 @@ Build command which is used to build the project.''')
                                                         ' jobs PER RUN that '
                                                         'can be executing.')
 
+        daemon_parser.add_argument('--docker', '--run-analysis-in-docker',
+                                   dest='docker',
+                                   action='store_true',
+                                   required=False,
+                                   help='Run the analysis in a Docker '
+                                        'container instance. (If not '
+                                        'specified, analysis runs in a '
+                                        'normal subprocess.)')
+
         add_database_arguments(daemon_parser)
         logger.add_verbose_arguments(daemon_parser)
         instance_manager.add_instance_arguments(daemon_parser)

@@ -341,7 +341,7 @@ class RemoteHandler(object):
         self.max_jobs = max_jobs_per_run
 
 
-def run_server(args, context, callback_event=None):
+def run_server(args, context, callback_event=None, dockerise=False):
     host = args.host
     port = args.port
     LOG.debug('Starting CodeChecker daemon ...')
