@@ -47,7 +47,7 @@ def __handler_local(outfile):
                      '.'])
     os.chdir(docker_folder)
 
-    with open('resources/from-local.Dockercommands.template') as template:
+    with open('resources/from.local.Dockercommands.template') as template:
         str = template.read()
         str = strip_comments(str)
         str = str.replace("{LOCAL_PATH}", local_path)
@@ -58,7 +58,7 @@ def __handler_local(outfile):
 def __handler_basic(outfile):
     """Handles the template instantiation for the 'basic' package."""
 
-    with open('resources/from-basic.Dockercommands.template') as template:
+    with open('resources/from.basic.Dockercommands.template') as template:
         str = template.read()
         str = strip_comments(str)
         str = str.replace("{REPO_URL}",
@@ -82,7 +82,7 @@ def __handle_stable(outfile):
         print("ERROR! Couldn't download release information from GitHub!")
         sys.exit(1)
 
-    with open('resources/from-stable.Dockercommands.template') as template:
+    with open('resources/from.stable.Dockercommands.template') as template:
         str = template.read()
         str = strip_comments(str)
         str = str.replace("{CURL_COMMAND}",
@@ -94,9 +94,12 @@ def __handle_stable(outfile):
         outfile.write(str)
 
 
-def handle_package(pkg, outfile):
+def handle_package(pkg, stage, outfile):
     if not pkg or not outfile:
         return
+
+    if stage != 'before' and stage != 'after':
+        raise ValueError("'{0}' is invalid stage.".format(stage))
 
     # Special handlers for template files
     handlers = {
@@ -105,21 +108,22 @@ def handle_package(pkg, outfile):
         'stable': lambda of: __handle_stable(of)
     }
 
-    if pkg not in handlers:
+    if pkg in handlers:
+        handlers[pkg](outfile)
+    else:
         # If no special handler is present, it might be meant
         # to be bare-handled.
+        commandfile = "resources/" + pkg + "." + stage + ".Dockercommands"
 
-        if not os.path.exists("resources/" + pkg + ".Dockercommands"):
-            print("ERROR! Requested to handle package '" + pkg + "' but no "
-                  "handler assigned!")
+        if not os.path.exists(commandfile):
+            print("ERROR! Requested to handle package '" + pkg + ":" + stage +
+                  "' but no handler assigned!")
             sys.exit(1)
         else:
-            with open("resources/" + pkg + ".Dockercommands") as template:
+            with open(commandfile) as template:
                 str = template.read()
                 str = strip_comments(str)
                 outfile.write(str)
-    else:
-        handlers[pkg](outfile)
 
 # ----------------------------------------------------------------------------
 
@@ -144,7 +148,7 @@ Description about the different packages
     basic       The LATEST bare minimum CodeChecker infrastructure, checked
                 out from GitHub
 
-    stable      The stable package is a bare minimum CodeChecker infrastructure,
+    stable      The stable package is a bare minimum CodeChecker infrastructure
                 downloaded from GitHub releases
 
 
@@ -199,6 +203,13 @@ arguments.add_argument('-n', '--name',
                        default="codechecker",
                        help='The name of the built Docker image.')
 
+arguments.add_argument('-d', '--dry-run',
+                       dest='dry_run',
+                       action='store_true',
+                       required=False,
+                       help='Stop execution after generating a Dockerfile, '
+                            'do NOT actually build Docker image.')
+
 args = arguments.parse_args()
 print(args)
 
@@ -206,8 +217,8 @@ print(args)
 # Step one: Build the selected packages.
 
 with open('Dockerfile', 'w') as dockerfile:
-    def handle(pkg):
-        handle_package(pkg, dockerfile)
+    def handle(pkg, stage):
+        handle_package(pkg, stage, dockerfile)
 
     if 'local' in args.packages or \
             'basic' in args.packages or \
@@ -221,28 +232,35 @@ with open('Dockerfile', 'w') as dockerfile:
                          pkg != 'basic' and
                          pkg != 'stable']
 
-    # Initial OS
-    print("Setting up 'base_OS'...")
+    # --- STAGE ZERO: Download base OS and install requirements ---
+    print("Setting up 'base_OS' ...")
     with open('resources/initial.Dockerfile') as initial:
         initial_docker = initial.read()
         dockerfile.write(strip_comments(initial_docker))
 
-    # CodeChecker package source
-    print("Setting up '" + args.base + "'...")
-    handle(args.base)
+    # --- STAGE ONE: Run system installers for specified packages ---
+    for pkg in args.packages:
+        print("Setting up '" + pkg + ":before' ...")
+        handle(pkg, 'before')
 
+    # --- STAGE TWO: Check out CodeChecker from the specified source ---
+    print("Setting up '" + args.base + "' ...")
+    handle(args.base, 'before')
+
+    # --- STAGE THREE: Run the CodeChecker-specific installers for pkgs ---
     # Put minimal install script into the Dockerfile
-    handle('basic-requirements')
+    print("Setting up 'basic_requirements' ...")
+    handle('basic-requirements', 'after')
 
     # Extra packages and related code
     for pkg in args.packages:
-        print("Setting up '" + pkg + "'...")
-        handle(pkg)
+        print("Setting up '" + pkg + ":after' ...")
+        handle(pkg, 'after')
 
-    # Install actions
+    # --- STAGE FOUR: (Optional) Run the installers too ---
     if args.install:
-        print("Setting up 'install'...")
-        handle('install')
+        print("Setting up 'install' ...")
+        handle('install', 'after')
     else:
         with open('resources/false-start.sh.template', 'r') as template:
             with open('false-start.sh', 'w') as output:
@@ -252,7 +270,7 @@ with open('Dockerfile', 'w') as dockerfile:
                 output.write(str)
 
         print("Setting up 'false-start'...")
-        handle('false-start')
+        handle('false-start', 'after')
 
 print("\nDone setting up Dockerfile.")
 print("---------------- BEGIN DOCKERFILE ----------------")
@@ -260,24 +278,26 @@ with open('Dockerfile', 'r') as dockerfile:
     print(dockerfile.read())
 print("----------------  END DOCKERFILE ----------------")
 
-# --------------
-# Step two: Call Docker.
 
-print("\n\nBuilding package...")
-subprocess.call(['docker', 'build', '--tag', args.name, '.'])
+if not args.dry_run:
+    # --------------
+    # Step two: Call Docker.
 
-# --------------
-# Step three: Run the built image.
-print("\n\nRunning a dummy of the installed package...")
-subprocess.call(['docker', 'run', '--rm', args.name])
+    print("\n\nBuilding package...")
+    subprocess.call(['docker', 'build', '--tag', args.name, '.'])
 
-# --------------
-# Step four: Cleanup.
-print("\n")
-os.remove("Dockerfile")
+    # --------------
+    # Step three: Run the built image.
+    print("\n\nRunning a dummy of the installed package...")
+    subprocess.call(['docker', 'run', '--rm', args.name])
 
-if args.base == 'local' and os.path.exists("codechecker.tar.gz"):
-    os.remove("codechecker.tar.gz")
+    # --------------
+    # Step four: Cleanup.
+    print("\n")
+    os.remove("Dockerfile")
 
-if not args.install and os.path.exists("false-start.sh"):
-    os.remove("false-start.sh")
+    if args.base == 'local' and os.path.exists("codechecker.tar.gz"):
+        os.remove("codechecker.tar.gz")
+
+    if not args.install and os.path.exists("false-start.sh"):
+        os.remove("false-start.sh")
