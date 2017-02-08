@@ -283,12 +283,12 @@ def handle_daemon(args):
             res = subprocess.check_output(['docker', 'run',
                                            '--rm',
 
-                                           '--volume',
-                                           "/home/ericsza/CodeChecker/install"
-                                           "/CodeChecker:/root/CodeChecker",
+                                           #'--volume',
+                                           #"/home/ericsza/CodeChecker/install"
+                                           #"/CodeChecker:/root/CodeChecker",
 
-                                           '--entrypoint',
-                                           "/root/CodeChecker/bin/CodeChecker",
+                                           #'--entrypoint',
+                                           #"/root/CodeChecker/bin/CodeChecker",
 
                                            'codechecker',
 
@@ -298,15 +298,17 @@ def handle_daemon(args):
 
             if res.strip('\n') != "CODECHECKER_DAEMON_ANALYZER_READY":
                 LOG.error("The Docker container didn't respond properly.\n"
-                          "Make sure you created az --install image and "
+                          "Make sure you created an --install image and "
                           "that it is named 'codechecker'!")
                 LOG.info("The output was: \n" + res)
                 sys.exit(1)
         except OSError:
             LOG.error("Docker does not seem to be installed on the system!")
             sys.exit(1)
-        except subprocess.CalledProcessError:
+        except subprocess.CalledProcessError as ex:
             LOG.error("The initial test for the Docker image didn't conclude.")
+            LOG.error("Return code {0}, output:\n{1}"
+                      .format(ex.returncode, ex.output))
             sys.exit(1)
 
     local_db = util.is_localhost(args.dbaddress)

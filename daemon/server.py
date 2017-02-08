@@ -289,10 +289,10 @@ class RemoteHandler(object):
                      .format(run_config))
 
             with open(run_config, 'w') as cfgfile:
-                str = json.dumps(run.args.__dict__, indent=2)
-                str = str.replace(host_root, run.args.daemon_root)
-                cfgfile.write(str)
-                LOG.debug(str)
+                cfgstr = json.dumps(run.args.__dict__, indent=2)
+                cfgstr = cfgstr.replace(host_root, run.args.daemon_root)
+                cfgfile.write(cfgstr)
+                LOG.debug(cfgstr)
 
             import subprocess
             run_config = os.path.join(run.args.daemon_root, 'docker.runconfig')
@@ -301,20 +301,15 @@ class RemoteHandler(object):
                              # Remove container after run
                              '--rm',
 
-                             '-ti',
-
-                             # TODO: HACK: Please use a built and installed CC image
-                             '--volume',
-                             "/home/ericsza/CodeChecker/install"
-                             "/CodeChecker:/root/CodeChecker",
+                             #'-ti',
 
                              # Mount the file root as a volume
                              '--volume',
                              host_root + ":" + run.args.daemon_root,
 
                              # Override so we run the CodeChecker inside
-                             '--entrypoint',
-                             "/root/CodeChecker/bin/CodeChecker",
+                             #'--entrypoint',
+                             #"/root/CodeChecker/bin/CodeChecker",
                              #"/bin/bash",
 
                              'codechecker',

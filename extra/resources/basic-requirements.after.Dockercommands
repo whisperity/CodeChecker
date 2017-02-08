@@ -11,3 +11,5 @@
 #####################
 
 RUN pip install -r ~/codechecker_src/.ci/basic_python_requirements
+
+RUN pip install psutil
