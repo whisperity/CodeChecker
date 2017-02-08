@@ -10,4 +10,6 @@ COPY false-start.sh /root/bin/false-start.sh
 
 RUN chmod 755 ~/bin/false-start.sh
 
-CMD '/root/bin/false-start.sh'
+# A non-install image will offer only a false start
+# notice: please build with --install.
+ENTRYPOINT ["/root/bin/false-start.sh"]
