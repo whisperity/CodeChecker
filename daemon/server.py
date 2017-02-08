@@ -163,6 +163,10 @@ class RemoteHandler(object):
             os.makedirs(os.path.join(lock_object.args.daemon_root,
                                      'file-root'))
 
+        plist_path = os.path.join(lock_object.args.daemon_root, 'results')
+        if not os.path.exists(plist_path):
+            os.mkdir(plist_path)
+
         self._running_checks[run_name] = lock_object
 
         return Acknowledgement(lock_object.get_persistent_token(),
@@ -284,7 +288,7 @@ class RemoteHandler(object):
             run.args.daemon_root = "/var/CodeChecker"
             daemon_lib.prepare_checking(run, self.context, LOG)
 
-            run_config = os.path.join(host_root, 'docker.runconfig')
+            run_config = os.path.join(host_root, 'Docker.runconfig')
             LOG.info("Writing prepared run configuration into '{0}'"
                      .format(run_config))
 
@@ -295,22 +299,15 @@ class RemoteHandler(object):
                 LOG.debug(cfgstr)
 
             import subprocess
-            run_config = os.path.join(run.args.daemon_root, 'docker.runconfig')
+            run_config = os.path.join(run.args.daemon_root, 'Docker.runconfig')
             subprocess.call(['docker', 'run',
 
                              # Remove container after run
                              '--rm',
 
-                             #'-ti',
-
                              # Mount the file root as a volume
                              '--volume',
                              host_root + ":" + run.args.daemon_root,
-
-                             # Override so we run the CodeChecker inside
-                             #'--entrypoint',
-                             #"/root/CodeChecker/bin/CodeChecker",
-                             #"/bin/bash",
 
                              'codechecker',
 
@@ -324,6 +321,7 @@ class RemoteHandler(object):
 
             # Switch back the run config as execution comes back to the host
             run.args.daemon_root = host_root
+            os.remove(os.path.join(run.args.daemon_root, 'Docker.runconfig'))
             run.mark_finished()
 
     def fetchPlists(self, token):
@@ -373,9 +371,9 @@ class RemoteHandler(object):
 
         del self._running_checks[run.run_name]
 
-        # plist_path = os.path.join(run.args.daemon_root, 'results')
-        # if os.path.exists(plist_path):
-        #   shutil.rmtree(plist_path)
+        plist_path = os.path.join(run.args.daemon_root, 'results')
+        if os.path.exists(plist_path):
+            shutil.rmtree(plist_path)
 
     def getCheckerList(self, args_json):
         """Retrieve the list of checkers available on the server."""

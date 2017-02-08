@@ -107,6 +107,3 @@ def __main__(argv):
                                None,
                                LOG)
     LOG.info("Analysis over.")
-
-    LOG.info("Entering shell...")
-    subprocess.call(['/bin/bash'])
