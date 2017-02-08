@@ -7,6 +7,29 @@ tool.
 `make-docker.py` creates a `Dockerfile` based on the invocation and 
 compiles this `Dockerfile` into an image on the local computer.
 
+```bash
+usage: make-docker [-h] [-f pkg] [-b [pkg [pkg ...]]] [-i] [-n NAME] [-d]
+
+This script builds a CodeChecker docker image on the local computer, using
+the package(s) selected by the user.
+
+optional arguments:
+  -h, --help            show this help message and exit
+  -f pkg, --base pkg, --from pkg
+                        The base package (see below for available choices)
+                        from which CodeChecker source code should be retrieved.
+  -b [pkg [pkg ...]], --build [pkg [pkg ...]]
+                        The list of packages to compile into the build. See
+                        below for the available choices.
+  -i, --install         Create a Docker image that has a runnable CodeChecker
+                        installed within. If not specified the image will only
+                        contain the checked-out source code and the built
+                        environment, but no actual CodeChecker executable will
+                        be present.
+  -n NAME, --name NAME  The name of the built Docker image.
+  -d, --dry-run         Stop execution after generating a Dockerfile, do NOT
+                        actually build Docker image.
+```
 
 Usage
 -----
@@ -38,10 +61,12 @@ Only **one** `from` argument can be specified.
   * `local` &ndash; uploads the current CodeChecker code (the developer's
     local working copy) where `make-docker.py` is ran.
   * `basic` &ndash; uses [the `master`
-     branch](http://github.com/Ericsson/codechecker) from GitHub (this is
-     the _default_)
+    branch](http://github.com/Ericsson/codechecker) from GitHub (this is
+    the _default_)
   * `stable` &ndash; uses the [latest
     release](https://github.com/Ericsson/codechecker/releases/latest)
+  * `github:user/repo@branch` &ndash; checks out the given repository from
+    GitHub
 
 ### `build`
 
@@ -88,3 +113,8 @@ point_:
 Sets the resulting name of the built Docker image. By default, it's
 `codechecker`. The [usual Docker image name
 rules](https://docs.docker.com/engine/reference/commandline/build/) apply.
+
+### `dry-run`
+
+`--dry-run` will stop execution after creating the `Dockerfile`, enabling the
+user to add customisations into it.

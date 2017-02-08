@@ -9,6 +9,7 @@
 import argparse
 import json
 import os
+import re
 import shutil
 import subprocess
 import sys
@@ -55,16 +56,26 @@ def __handler_local(outfile):
         outfile.write(str)
 
 
-def __handler_basic(outfile):
-    """Handles the template instantiation for the 'basic' package."""
+def __handle_github(outfile, user, repo, branch='master'):
+    """Handles the template instantiation for retrieving 'github' packages."""
 
     with open('resources/from.basic.Dockercommands.template') as template:
         str = template.read()
         str = strip_comments(str)
         str = str.replace("{REPO_URL}",
-                          "http://github.com/Ericsson/codechecker.git")
+                          "http://github.com/{0}/{1}.git --branch {2}"
+                          .format(user, repo, branch))
 
         outfile.write(str)
+
+
+def __handler_basic(outfile):
+    """
+    Handles the template instantiation for the 'basic' package.
+    This retrieves CodeChecker master from GitHub.
+    """
+
+    __handle_github(outfile, 'Ericsson', 'codechecker', 'master')
 
 
 def __handle_stable(outfile):
@@ -110,6 +121,13 @@ def handle_package(pkg, stage, outfile):
 
     if pkg in handlers:
         handlers[pkg](outfile)
+    elif pkg.startswith('github:'):
+        mg = re.match("github:([^\s]+)\/([^\s@]+)(@[^\s]+)?", pkg)
+        user = mg.group(1)
+        repo = mg.group(2)
+        branch = (mg.group(3) or '').lstrip('@')
+
+        __handle_github(outfile, user, repo, branch)
     else:
         # If no special handler is present, it might be meant
         # to be bare-handled.
@@ -126,6 +144,13 @@ def handle_package(pkg, stage, outfile):
                 outfile.write(str)
 
 # ----------------------------------------------------------------------------
+
+
+def is_valid_base_choice(choice):
+    return choice == 'local' or \
+           choice == 'basic' or \
+           choice == 'stable' or \
+           re.search("github:([^\s]+)\/([^\s@]+)(@[^\s]+)?", choice)
 
 arguments = argparse.ArgumentParser(
     prog="make-docker",
@@ -151,6 +176,9 @@ Description about the different packages
     stable      The stable package is a bare minimum CodeChecker infrastructure
                 downloaded from GitHub releases
 
+    github:username/repo@branch    Download a version from GitHub, using a
+                                   particular user's repository and branch.
+
 
 ++ Full (required for using every "stock" capability of CodeChecker)
 
@@ -170,11 +198,10 @@ arguments.add_argument('-f', '--base', '--from',
                        dest='base',
                        metavar='pkg',
                        default='basic',
-                       choices=['local', 'basic', 'stable'],
                        required=False,
                        help='The base package (see below in Section "Minimal"'
                             ' for available choices) from which CodeChecker '
-                            'source code must be retrieved.')
+                            'source code should be retrieved.')
 
 arguments.add_argument('-b', '--build',
                        type=str,
@@ -211,7 +238,6 @@ arguments.add_argument('-d', '--dry-run',
                             'do NOT actually build Docker image.')
 
 args = arguments.parse_args()
-print(args)
 
 # --------------
 # Step one: Build the selected packages.
@@ -220,46 +246,55 @@ with open('Dockerfile', 'w') as dockerfile:
     def handle(pkg, stage):
         handle_package(pkg, stage, dockerfile)
 
-    if 'local' in args.packages or \
-            'basic' in args.packages or \
-            'stable' in args.packages:
-        print("ERROR! Base image choice 'local' or 'basic' or 'stable' was "
-              "specified as extra package.")
-        print("       Disregarding...")
+    if not is_valid_base_choice(args.base):
+        print("ERROR! Base image choice '" + args.base + "' is not valid!")
+        sys.exit(1)
 
-        args.packages = [pkg for pkg in args.packages
-                         if pkg != 'local' and
-                         pkg != 'basic' and
-                         pkg != 'stable']
+    if any([True for pkg in args.packages
+            if is_valid_base_choice(pkg)]):
+        print("ERROR! At least one base image choice 'local', 'basic', "
+              "'stable' or a 'github:' link was specified as extra package.")
+        print("       These packages will be disregarded...")
 
     # --- STAGE ZERO: Download base OS and install requirements ---
-    print("Setting up 'base_OS' ...")
+    print("-> Setting up 'base_OS' ...")
+    print("-> Setting up 'initial' ...")
     with open('resources/initial.Dockerfile') as initial:
         initial_docker = initial.read()
         dockerfile.write(strip_comments(initial_docker))
 
     # --- STAGE ONE: Run system installers for specified packages ---
+    print("-- Packing 'before' installers - setting up system modules ...")
     for pkg in args.packages:
-        print("Setting up '" + pkg + ":before' ...")
+        if is_valid_base_choice(pkg):
+            print("!! Disregarding '" + pkg + "' as it is a base image...")
+            continue
+
+        print("-> Setting up '" + pkg + ":before' ...")
         handle(pkg, 'before')
 
     # --- STAGE TWO: Check out CodeChecker from the specified source ---
-    print("Setting up '" + args.base + "' ...")
+    print("-> Setting up base '" + args.base + "' ...")
     handle(args.base, 'before')
 
     # --- STAGE THREE: Run the CodeChecker-specific installers for pkgs ---
     # Put minimal install script into the Dockerfile
-    print("Setting up 'basic_requirements' ...")
+    print("-> Setting up 'basic_requirements' ...")
     handle('basic-requirements', 'after')
 
     # Extra packages and related code
+    print("-- Packing 'after' installers - setting up from CodeChecker ...")
     for pkg in args.packages:
-        print("Setting up '" + pkg + ":after' ...")
+        if is_valid_base_choice(pkg):
+            print("!! Disregarding '" + pkg + "' as it is a base image...")
+            continue
+
+        print("-> Setting up '" + pkg + ":after' ...")
         handle(pkg, 'after')
 
     # --- STAGE FOUR: (Optional) Run the installers too ---
     if args.install:
-        print("Setting up 'install' ...")
+        print("-> Setting up 'install' ...")
         handle('install', 'after')
     else:
         with open('resources/false-start.sh.template', 'r') as template:
@@ -269,14 +304,14 @@ with open('Dockerfile', 'w') as dockerfile:
 
                 output.write(str)
 
-        print("Setting up 'false-start'...")
+        print("?> Setting up 'false-start'...")
         handle('false-start', 'after')
 
-print("\nDone setting up Dockerfile.")
-print("---------------- BEGIN DOCKERFILE ----------------")
-with open('Dockerfile', 'r') as dockerfile:
-    print(dockerfile.read())
-print("----------------  END  DOCKERFILE ----------------")
+print("\n:) Done setting up Dockerfile.")
+# print("---------------- BEGIN DOCKERFILE ----------------")
+# with open('Dockerfile', 'r') as dockerfile:
+#     print(dockerfile.read())
+# print("----------------  END  DOCKERFILE ----------------")
 
 
 if not args.dry_run:
