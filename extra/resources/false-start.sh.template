@@ -1,5 +1,14 @@
 #!/usr/bin/env bash
 
+if [ $# -eq 1 ] && [ "$1" == "/bin/bash" ]
+then
+  echo "Attaching to shell in the image..."
+  /bin/bash
+  exit $?
+fi
+
+# Default notice
+
 echo "This is NOT a proper CodeChecker install in the Docker image!"
 echo "Please create the Docker image with --install to get a runnable CodeChecker image."
 echo

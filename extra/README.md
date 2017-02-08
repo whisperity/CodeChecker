@@ -25,7 +25,7 @@ The script takes some extra arguments. For example, to build an image from the
 latest CodeChecker release on GitHub with full support (such as PostgreSQL
 database) with a custom name, execute the command: 
 
-    ./make-docker.py --from stable --build full --install --name codechecker-full
+    ./make-docker.py --from stable --build full --install --name codechecker:full
 
 ### `from`
 
