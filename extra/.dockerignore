@@ -1,0 +1,3 @@
+*
+!*.deb
+!docker_test.sh
