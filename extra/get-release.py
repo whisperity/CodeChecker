@@ -5,8 +5,10 @@ import argparse
 import glob
 import json
 import os
+import re
 import shutil
 import subprocess
+import sys
 import urllib2
 
 parser = argparse.ArgumentParser(
@@ -34,7 +36,8 @@ parser.add_argument('-i', '--install',
 args = parser.parse_args()
 
 release_data = {'version': "0.0",
-                'name': "codechecker-0.0"
+                'name': "codechecker-0.0",
+                'filename': "codechecker_0.0.orig.tar.gz"
                 }
 
 
@@ -52,15 +55,15 @@ def github():
 
         release_data['version'] = version
         release_data['name'] = "codechecker-" + version
-        local_filename = "codechecker_" + version + ".orig.tar.gz"
+        release_data['filename'] = "codechecker_" + version + ".orig.tar.gz"
     else:
         print("ERROR! Couldn't download release information from GitHub!")
         sys.exit(1)
 
     print("Downloading release from GitHub...")
-    subprocess.call(["curl", "-L", remote_url, "-o", local_filename])
+    subprocess.call(["curl", "-L", remote_url, "-o", release_data['filename']])
     print("Downloaded release " + version)
-    subprocess.call(["tar", "xfz", local_filename])
+    subprocess.call(["tar", "xfz", release_data['filename']])
     print("Extracting release...")
     subprocess.call(["mv", glob.glob("Ericsson-codechecker-*")[0],
                      release_data['name']])
@@ -69,16 +72,17 @@ def github():
 
 
 def local():
-    tarfile = release_data['name'] + ".orig.tar.gz"
+    release_data['filename'] = release_data['name'] + ".orig.tar.gz"
 
     print("Packing local working directory...")
-    subprocess.call(["tar", "cfz", tarfile, "..",
+    subprocess.call(["tar", "cfz", release_data['filename'], "..",
                      "--exclude=../.git", "--exclude=../extra",
                      "--exclude=../build"])
-    os.mkdir(release_name)
+    os.makedirs(release_data['name'])
 
     print("Extracting to proper folder structure...")
-    subprocess.call(["tar", "xfz", tarfile, "-C", release_data['name']])
+    subprocess.call(["tar", "xfz", release_data['filename'],
+                     "-C", release_data['name']])
 
     print("Created from local.")
 
@@ -109,8 +113,38 @@ if not os.path.exists("debian"):
                      "--package", 'codechecker',
                      "--newversion", release_data['version'],
                      "--upstream",
-                     "Created Debian package from " + args.base +
-                     " upstream."])
+                     "Created Debian package from '" + args.base +
+                     "' upstream."])
+
+    # We need to create a "non-native" package, ie. a Debian version
+    # The policy manual dictates not to build a Debian native package
+    # if the product is expected to be ran on non-Debian (or derived) systems.
+    subprocess.call(["dch",
+                     "--package", 'codechecker',
+                     "--increment",
+                     "_"])
+
+    with open(os.path.join('debian', 'changelog'), 'r+') as dummy_changelog:
+        line = dummy_changelog.readline()
+        is_ubuntu = 'ubuntu' in line
+
+        release_data['version'] = re.match(r'codechecker \(([\d\.\w-]+)\)',
+                                           line).group(1)
+        release_data['filename'] = "codechecker_" + release_data['version'] +\
+                                   ".orig.tar.gz"
+
+        # Remove the dummy line
+        dummy_changelog.seek(0)
+        text = dummy_changelog.read()
+        dummy_changelog.seek(0)
+
+        text = text.replace("  * _\n", "")
+        dummy_changelog.truncate()
+        dummy_changelog.write(text)
+
+    # We also need to rename the release file
+    orig = glob.glob("*.orig.tar.gz")[0]
+    shutil.move(orig, release_data['filename'])
 
     # dch expects you to be ABOVE the debian folder, so we only 'cd' here
     os.chdir("debian")
@@ -126,7 +160,13 @@ if not os.path.exists("debian"):
 
         wr("Source: codechecker")
         wr("Maintainer: The CodeChecker Team <codechecker@codecheck.er>")
-        wr("Section: devel")
+        # The version of the Debian Standard on Ubuntu 16.04 LTS is 3.9.6
+        # https://www.debian.org/doc/debian-policy/ (see dh_make)
+        wr("Standards-Version: 3.9.6")
+        if is_ubuntu:
+            wr("Section: universe/devel")
+        else:  # Debian
+            wr("Section: devel")
         wr("Priority: optional")
         wr("Build-Depends: debhelper (>= 9),")
         wr("               curl (>= 7.35),")
@@ -165,7 +205,8 @@ if not os.path.exists("debian"):
         wr(" in a database, which is viewable from a command-line and a")
         wr(" web-browser based result viewer, both of which is included in")
         wr(" this package.")
-        wr("Bugs: http://github.com/Ericsson/codechecker/issues")
+        if is_ubuntu:
+            wr("Bugs: http://github.com/Ericsson/codechecker/issues")
 
     # TODO: Copyright?
     with open("copyright", 'w') as copyright:
@@ -184,6 +225,11 @@ if not os.path.exists("debian"):
         wr()
         wr("override_dh_auto_install:")
         wr("\tcp -R build/CodeChecker $$(pwd)/debian/codechecker/opt")
+        wr()
+        wr("override_dh_installman:")
+        wr("\tinstall -m 0644 $$(pwd)/../CodeChecker.1 "
+           "$$(pwd)/debian/codechecker/usr/share/man/man1")
+    os.chmod("rules", 0755)
 
     # The packaging install is to happen at debian/install/opt/CodeChecker,
     # but it does not exist. We need to tell the packager to create it!
@@ -193,6 +239,7 @@ if not os.path.exists("debian"):
 
         wr("opt/CodeChecker")
         wr("usr/bin")
+        wr("usr/share/man/man1")
 
     # Set up the list of symbolic links we need to create
     with open("codechecker.links", 'w') as links:
