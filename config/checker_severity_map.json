@@ -20,7 +20,7 @@
   "alpha.cplusplus.InvalidatedIterator":                        "HIGH",
   "alpha.cplusplus.IteratorModeling":                           "MEDIUM",
   "alpha.cplusplus.IteratorRange":                              "MEDIUM",
-  "alpha.cplusplus.MismatchedIterator":                         "MEDIUM",  
+  "alpha.cplusplus.MismatchedIterator":                         "MEDIUM",
   "alpha.cplusplus.PlacementNew":                               "HIGH",
   "alpha.cplusplus.SmartPtr":                                   "HIGH",
   "alpha.cplusplus.UninitializedObject":                        "MEDIUM",

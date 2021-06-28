@@ -1,0 +1,87 @@
+name: Config file coverage
+
+on:
+  push:
+    paths:
+      - '.github/workflow/config_coverage.yml'
+      - 'config/checker_severity_map.json'
+  pull_request:
+    paths:
+      - '.github/workflow/config_coverage.yml'
+      - 'config/checker_severity_map.json'
+  # Allow running this job manually from either API or GitHub UI.
+  workflow_dispatch:
+
+jobs:
+  severity_map_check:
+    name: "config/checker_severity_map.json"
+    runs-on: ubuntu-20.04
+    steps:
+      - uses: actions/checkout@v2
+      - uses: actions/setup-python@v2
+        with:
+          python-version: '3.8'
+      - name: "Get latest LLVM from PPA"
+        run: |
+          export DISTRO_FANCYNAME="$(lsb_release -c | awk '{ print $2 }')"
+          sudo apt-get -qy update
+          sudo apt-get -y --no-install-recommends install \
+            build-essential \
+            curl            \
+            gcc-multilib    \
+            python3-dev     \
+            python3-venv
+          curl -sL http://apt.llvm.org/llvm-snapshot.gpg.key | sudo apt-key add -
+          sudo add-apt-repository -y "deb http://apt.llvm.org/$DISTRO_FANCYNAME/ llvm-toolchain-$DISTRO_FANCYNAME main"
+          # Get the largest Clang package number available.
+          export LLVM_VER="$(apt-cache search --full 'clang-[[:digit:]]*$' | grep '^Package: clang' | cut -d ' ' -f 2 | sort -V | tail -n 1 | sed 's/clang-//')"
+          sudo apt-get -y --no-install-recommends install \
+            clang-$LLVM_VER      \
+            clang-tidy-$LLVM_VER
+          sudo update-alternatives --install                   \
+            /usr/bin/clang clang /usr/bin/clang-$LLVM_VER 1000 \
+            --slave                                            \
+              /usr/bin/clang-tidy clang-tidy /usr/bin/clang-tidy-$LLVM_VER
+          echo "Installed LLVM:"
+          update-alternatives --query clang
+      - name: "Package CodeChecker"
+        id: codechecker
+        run: |
+          pushd analyzer
+          make venv
+          source venv/bin/activate
+          make standalone_package
+          deactivate
+          echo "::set-output name=CODECHECKER_PATH::$(readlink -f ./build/CodeChecker/bin)"
+          popd # analyzer
+      - name: "Dump checkers"
+        run: |
+          export PATH="${{ steps.codechecker.outputs.CODECHECKER_PATH }}:$PATH"
+          CodeChecker analyzers --details
+          CodeChecker checkers > checker_list.txt
+      - name: "Perform coverage check"
+        run: |
+          set +e # Do not hard exit on erroring call!
+          .github/workflows/config_severity_check.py \
+            "checker_list.txt" \
+            "config/checker_severity_map.json" \
+            --existing-ignore-suffix \
+              "Sanitizer" \
+            --new-ignore \
+              "alpha." \
+              "apiModeling." \
+              "debug." \
+              "optin.osx." \
+              "osx." \
+              "darwin-" \
+              "objc-"
+          EXIT_STATUS=$?
+          echo "Coverage check returned: $EXIT_STATUS."
+          # Explicitly check if the bit for "8" is set in the result,
+          # indicating new checkers without severity set.
+          if [[ $(($EXIT_STATUS & 8)) -eq 8 ]]
+          then
+            exit 8
+          else
+            exit 0
+          fi
