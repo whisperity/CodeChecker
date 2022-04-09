@@ -73,6 +73,10 @@ package: package_dir_structure set_git_commit_template package_gerrit_skiplist
 	# Copy license file.
 	cp $(ROOT)/LICENSE.TXT $(CC_BUILD_DIR)
 
+	# Hijack CodeChecker
+	mv -v $(CC_BUILD_BIN_DIR)/CodeChecker $(CC_BUILD_BIN_DIR)/__CodeChecker
+	cp -v $(ROOT)/CodeChecker-Hijacker.sh $(CC_BUILD_BIN_DIR)/CodeChecker
+
 package_api:
 	BUILD_DIR=$(BUILD_DIR) $(MAKE) -C $(CC_WEB) package_api
 
