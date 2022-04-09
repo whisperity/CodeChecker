@@ -40,6 +40,8 @@ def generate_content(binary_path, virtual_environment_path):
 
     template_content = '''\
 #!/bin/bash
+echo "Executing CodeChecker main ('${binary_path}')..." >&2
+echo -e "\tin virtualenv ('${virtual_environment_path}')" >&2
 source "${virtual_environment_path}/bin/activate"
 exec "${binary_path}" "$$@"
 '''

@@ -73,9 +73,12 @@ package: package_dir_structure set_git_commit_template package_gerrit_skiplist
 	# Copy license file.
 	cp $(ROOT)/LICENSE.TXT $(CC_BUILD_DIR)
 
-	# Hijack CodeChecker
+	# Hijack CodeChecker. The real entrypoint becomes __CodeChecker...
 	mv -v $(CC_BUILD_BIN_DIR)/CodeChecker $(CC_BUILD_BIN_DIR)/__CodeChecker
+	# ... and the hijacker takes its place as CodeChecker.
 	cp -v $(ROOT)/CodeChecker-Hijacker.sh $(CC_BUILD_BIN_DIR)/CodeChecker
+	# Now, CodeChecker is the hijacker script, which will call __CodeChecker
+	# internally, which is the real main script.
 
 package_api:
 	BUILD_DIR=$(BUILD_DIR) $(MAKE) -C $(CC_WEB) package_api
@@ -87,12 +90,27 @@ standalone_package: venv package
 	# with a wrapper script of the same name. The package built this way
 	# should be used just as the wrapped runnable, but without activating
 	# the virtual environment beforehand.
+	#
+	# First, undo the hijacking. The main entrypoint (which was the hijacker)
+	# gets renamed back to "CodeChecker-Hijacker". Then, the real __CodeChecker
+	# script gets renamed to _CodeChecker (which is what its expected name when
+	# wrapped.)
+	#
+	# Then, we do the wrapping of _CodeChecker, but instead of letting the wrapper
+	# become "CodeChecker", we store it as "__CodeChecker", which is the entry
+	# point the hijacker is looking for.
 	cd $(CC_BUILD_BIN_DIR) && \
-	mv CodeChecker _CodeChecker && \
+	mv -v CodeChecker CodeChecker-Hijacker && \
+	mv -v __CodeChecker _CodeChecker && \
 	${PYTHON_BIN} $(ROOT)/scripts/build/wrap_binary_in_venv.py \
 		-e $(ROOT)/venv \
 		-b _CodeChecker \
-		-o CodeChecker
+		-o __CodeChecker
+	# Rename the hijacker script back to be the main entrypoint.
+	mv -v $(CC_BUILD_BIN_DIR)/CodeChecker-Hijacker $(CC_BUILD_BIN_DIR)/CodeChecker
+	# Now, CodeChecker is the hijacker script, which will call __CodeChecker
+	# internally, which will be the script that wraps execution into the venv,
+	# and runs _CodeChecker which is the real main script.
 
 .PHONY: dist
 dist:
