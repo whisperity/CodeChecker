@@ -191,6 +191,38 @@ struct RunData {
 }
 typedef list<RunData> RunDataList
 
+struct SubmittedRunOptions {
+  1:          string       runName,
+  2:          string       tag,
+  3:          string       version,          // The version of CodeChecker with
+                                             // which the analysis was done.
+  4:          bool         force,            // If set, existing results in
+                                             // the run are removed first.
+  5:          list<string> trimPathPrefixes,
+  6: optional string       description
+}
+
+struct AsynchronousRunStoreHandle {
+  1: i64    pendingStoreToken,
+  2: string runName,
+}
+
+enum AsynchronousRunStoreStatus {
+  PROCESSING,
+  SUCCESSFUL,
+  FAILURE
+}
+
+struct AsynchronousRunStoreResult {
+  1: AsynchronousRunStoreStatus status,
+  1: string                     runName,
+  2: i64                        startEpochTimestamp,
+  3: i64                        endEpochTimestamp,
+  4: string                     Comments, // Contains additional, non-machine-
+                                          // readable information, usually when
+                                          // the store operation failed.
+}
+
 struct RunHistoryData {
   1: i64                     runId,              // Unique id of the run.
   2: string                  runName,            // Name of the run.
@@ -917,6 +949,13 @@ service codeCheckerDBAccess {
   // The "version" parameter is the used CodeChecker version which checked this
   // run.
   // The "force" parameter removes existing analysis results for a run.
+  //
+  // !DEPRECATED!: Use of this function is deprecated as the storing client
+  // process is prone to infinite hangs while waiting for the return value of
+  // the Thrift call if the network communication terminates during the time
+  // the server is processing the sent data, which might take a very long time.
+  // Clients are expected to use the massStoreRunAsynchronous() function instead!
+  //
   // PERMISSION: PRODUCT_STORE
   i64 massStoreRun(1: string          runName,
                    2: string          tag,
@@ -926,6 +965,44 @@ service codeCheckerDBAccess {
                    6: list<string>    trimPathPrefixes,
                    7: optional string description)
                    throws (1: codechecker_api_shared.RequestFailed requestError),
+
+  // This function stores an entire analysis run encapsulated and sent as a
+  // ZIP file. The ZIP file must be compressed and sent as a Base64-encoded
+  // string. It must contain a "reports" and an optional "root" sub-directory.
+  // "reports" contains the output of the 'CodeChecker analyze' command, while
+  // "root", if present, contains the source code of the project with their
+  // full paths, with the logical "root" replacing the original "/" directory.
+  //
+  // The source files are not necessary to be present in the ZIP, see
+  // getMissingContentHashes() for details.
+  //
+  // After performing an initial validation of the well-formedness of the
+  // submitted structure (ill-formedness is reported as an exception), the
+  // potentially lengthy processing of the data and the database operations are
+  // done asynchronously.
+  //
+  // This function returns an AsynchronousRunStoreHandle, which SHOULD be used
+  // as the argument of the checkPendingStoreStatus() for clients to retrieve
+  // the processing's state. Clients MAY decide to "detach", i.e., not to wait
+  // for the processing of the submitted data, and ignore the returned handle.
+  //
+  // PERMISSION: PRODUCT_STORE
+  AsynchronousRunStoreHandle massStoreRunAsynchronous(
+      1: string              zipfileBlob,  // Base64-encoded string.
+      2: SubmittedRunOptions storeOpts)
+      throws (1: codechecker_api_shared.RequestFailed requestError),
+
+  // Retrieves the status of a pending massStoreRunAsynchronous() operation
+  // from the server. If the server-side processing of the data had concluded
+  // (both successfully or erroneously), the pending result is consumed and
+  // deleted from the database.
+  //
+  // Only the user who iniated the processing may check its status.
+  //
+  // PERMISSION: PRODUCT_STORE
+  AsynchronousRunStoreResult checkPendingStoreStatus(
+      1: AsynchronousRunStoreHandle token)
+      throws (1: codechecker_api_shared.RequestFailed requestError),
 
   // Returns true if analysis statistics information can be sent to the server,
   // otherwise it returns false.
