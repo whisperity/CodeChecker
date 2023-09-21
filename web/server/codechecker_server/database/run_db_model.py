@@ -99,6 +99,42 @@ class RunLock(Base):
         return datetime.now() > self.when_expires(grace_seconds)
 
 
+class PendingRunStore(Base):
+    """
+    Stores information about the state of a pending 'store' operation.
+    """
+
+    __tablename__ = "pending_stores"
+
+    token = Column(Integer, primary_key=True)
+    status = Column(Enum("ongoing",
+                         "successful",
+                         "failed",
+                         name="status"))
+    name = Column(String, nullable=False)
+    username = Column(String, nullable=True)
+    started_at = Column(DateTime, nullable=False)
+    finished_at = Column(DateTime, nullable=True)
+    comment = Column(String, nullable=True)
+
+    def __init__(self, run_name, username=None):
+        self.status = "ongoing"
+        self.name = run_name
+        self.username = username
+        self.started_at = datetime.now()
+        self.finished_at = None
+        self.comment = None
+
+    def set_successful(self):
+        self.status = "successful"
+        self.finished_at = datetime.now()
+
+    def set_failed(self, failure_reason=None):
+        self.status = "failed"
+        self.finished_at = datetime.now()
+        self.comment = failure_reason
+
+
 class AnalyzerStatistic(Base):
     __tablename__ = 'analyzer_statistics'
 

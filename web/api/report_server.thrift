@@ -966,6 +966,8 @@ service codeCheckerDBAccess {
                    7: optional string description)
                    throws (1: codechecker_api_shared.RequestFailed requestError),
 
+  /// FIXME: API version upgrade must still be performed!
+
   // This function stores an entire analysis run encapsulated and sent as a
   // ZIP file. The ZIP file must be compressed and sent as a Base64-encoded
   // string. It must contain a "reports" and an optional "root" sub-directory.
