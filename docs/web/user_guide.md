@@ -430,7 +430,7 @@ usage: CodeChecker store [-h] [-t {plist}] [-n NAME] [--tag TAG]
                          [--verbose {info,debug,debug_analyzer}]
                          [file/folder [file/folder ...]]
 
-Store the results from one or more 'codechecker-analyze' result files in a
+Store the results from one or more 'CodeChecker analyze' result files in a
 database.
 
 positional arguments:
@@ -465,6 +465,11 @@ optional arguments:
                         is given, the longest match will be removed. You may
                         also use Unix shell-like wildcards (e.g.
                         '/*/jsmith/').
+  --detach              Exit immediately once the server accepted the analysis
+                        reports for storing, without waiting for the server-side
+                        processing to conclude. Doing this is generally not
+                        recommended, as the client will not be notified of
+                        server-side processing failures.
   --config CONFIG_FILE  Allow the configuration from an explicit configuration
                         file. The values configured in the config file will
                         overwrite the values set in the command line.

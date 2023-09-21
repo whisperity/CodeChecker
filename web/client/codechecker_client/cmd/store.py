@@ -155,7 +155,7 @@ def get_argparser_ctor_args():
 
         # Description is shown when the command's help is queried directly
         'description': """
-Store the results from one or more 'codechecker-analyze' result files in a
+Store the results from one or more 'CodeChecker analyze' result files in a
 database.""",
 
         # Epilogue is shown after the arguments when the help is queried
@@ -254,6 +254,18 @@ def add_arguments_to_parser(parser):
                              "If multiple prefixes are given, the longest "
                              "match will be removed. You may also use Unix "
                              "shell-like wildcards (e.g. '/*/jsmith/').")
+
+    parser.add_argument('--detach',
+                        dest="detach",
+                        default=argparse.SUPPRESS,
+                        action='store_true',
+                        required=False,
+                        help="Exit immediately once the server accepted the "
+                             "analysis reports for storing, without waiting "
+                             "for the server-side processing to conclude. "
+                             "Doing this is generally not recommended, as "
+                             "the client will not be notified of server-side "
+                             "processing failures.")
 
     cmd_config.add_option(parser)
 
