@@ -670,6 +670,7 @@ class Product:
                  self.endpoint)
 
         db_cleanup.remove_expired_run_locks(self.session_factory)
+        db_cleanup.remove_stale_pending_store_tokens(self.session_factory)
         db_cleanup.remove_unused_data(self.session_factory)
         db_cleanup.upgrade_severity_levels(self.session_factory,
                                            self.__context.checker_labels)
