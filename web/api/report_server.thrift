@@ -215,10 +215,10 @@ enum AsynchronousRunStoreStatus {
 
 struct AsynchronousRunStoreResult {
   1: AsynchronousRunStoreStatus status,
-  1: string                     runName,
-  2: i64                        startEpochTimestamp,
-  3: i64                        endEpochTimestamp,
-  4: string                     Comments, // Contains additional, non-machine-
+  2: string                     runName,
+  3: i64                        startEpochTimestamp,
+  4: i64                        endEpochTimestamp,
+  5: string                     Comments, // Contains additional, non-machine-
                                           // readable information, usually when
                                           // the store operation failed.
 }
@@ -965,8 +965,6 @@ service codeCheckerDBAccess {
                    6: list<string>    trimPathPrefixes,
                    7: optional string description)
                    throws (1: codechecker_api_shared.RequestFailed requestError),
-
-  /// FIXME: API version upgrade must still be performed!
 
   // This function stores an entire analysis run encapsulated and sent as a
   // ZIP file. The ZIP file must be compressed and sent as a Base64-encoded
