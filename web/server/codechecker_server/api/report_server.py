@@ -1023,8 +1023,7 @@ def check_remove_runs_lock(session, run_ids):
     expired yet. If so, the run cannot be deleted, as someone is assumed to
     be storing into it.
     """
-    locks_expired_at = datetime.now() - timedelta(
-        seconds=db_cleanup.RUN_LOCK_TIMEOUT_IN_DATABASE)
+    locks_expired_at = datetime.now() - db_cleanup.RUN_LOCK_TIMEOUT_IN_DATABASE
 
     run_locks = session.query(RunLock.name) \
         .filter(RunLock.locked_at >= locks_expired_at)

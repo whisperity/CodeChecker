@@ -87,16 +87,16 @@ class RunLock(Base):
         """Update the lock's timestamp to be the current one."""
         self.locked_at = datetime.now()
 
-    def when_expires(self, grace_seconds):
+    def when_expires(self, delta: timedelta):
         """Calculates when the current lock will expire assuming the
-        expiration time is grace_seconds, and the lock will never be touched
+        expiration time is delta, and the lock will never be touched
         until this moment."""
-        return self.locked_at + timedelta(seconds=grace_seconds)
+        return self.locked_at + delta
 
-    def has_expired(self, grace_seconds):
+    def has_expired(self, delta: timedelta):
         """Returns if the lock has expired, i.e. since the last touch()
-        or creation, grace_seconds number of seconds has passed."""
-        return datetime.now() > self.when_expires(grace_seconds)
+        or creation, delta time has passed."""
+        return datetime.now() > self.when_expires(delta)
 
 
 class PendingRunStore(Base):
