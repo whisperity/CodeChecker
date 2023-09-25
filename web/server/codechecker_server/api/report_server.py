@@ -30,13 +30,20 @@ from sqlalchemy.sql.expression import or_, and_, not_, func, \
 
 import codechecker_api_shared
 from codechecker_api.codeCheckerDBAccess_v6 import constants, ttypes
-from codechecker_api.codeCheckerDBAccess_v6.ttypes import AnalysisInfoFilter, \
-    BlameData, BlameInfo, BugPathPos, CheckerCount, Commit, CommitAuthor, \
-    CommentData, DiffType, Encoding, RunHistoryData, Order, ReportData, \
-    ReportDetails, ReviewData, ReviewStatusRule, ReviewStatusRuleFilter, \
-    ReviewStatusRuleSortMode, ReviewStatusRuleSortType, RunData, RunFilter, \
-    RunReportCount, RunSortType, RunTagCount, SourceComponentData, \
-    SourceFileData, SortMode, SortType, ExportData
+from codechecker_api.codeCheckerDBAccess_v6.ttypes import \
+    AnalysisInfoFilter, AsynchronousRunStoreHandle, \
+    AsynchronousRunStoreResult, AsynchronousRunStoreStatus, \
+    BlameData, BlameInfo, BugPathPos, \
+    CheckerCount, Commit, CommitAuthor, CommentData, \
+    DiffType, \
+    Encoding, ExportData, \
+    Order, \
+    ReportData, ReportDetails, ReviewData, ReviewStatusRule, \
+    ReviewStatusRuleFilter, ReviewStatusRuleSortMode, \
+    ReviewStatusRuleSortType, RunData, RunFilter, RunHistoryData, \
+    RunReportCount, RunSortType, RunTagCount, \
+    SourceComponentData, SourceFileData, SortMode, SortType, \
+    SubmittedRunOptions
 
 from codechecker_common import util
 from codechecker_common.logger import get_logger
@@ -3571,6 +3578,22 @@ class ThriftRequestHandler:
         m = MassStoreRun(self, name, tag, version, b64zip, force,
                          trim_path_prefixes, description)
         return m.store()
+
+    @exc_to_thrift_reqfail
+    @timeit
+    def massStoreRunAsynchronous(self, zipfile_blob: str,
+                                 store_opts: SubmittedRunOptions) \
+            -> AsynchronousRunStoreHandle:
+        # TODO: Implement this.
+        LOG.info(store_opts.__dict__)
+        pass
+
+    @exc_to_thrift_reqfail
+    @timeit
+    def checkPendingStoreStatus(self, token: AsynchronousRunStoreHandle) \
+            -> AsynchronousRunStoreResult:
+        # TODO: Implement this.
+        pass
 
     @exc_to_thrift_reqfail
     @timeit

@@ -48,6 +48,7 @@ def remove_expired_run_locks(session_maker):
                 sqlalchemy.exc.ProgrammingError) as ex:
             LOG.error("Failed to remove expired run locks: %s", str(ex))
 
+
 def remove_stale_pending_store_tokens(session_maker):
     LOG.debug("Garbage collection of stale pending store tokens started...")
 
@@ -60,7 +61,7 @@ def remove_stale_pending_store_tokens(session_maker):
                 .filter(and_(PendingRunStore.status != "ongoing",
                              PendingRunStore.finished_at is not None,
                              PendingRunStore.finished_at <
-                                tokens_became_stale_at)) \
+                             tokens_became_stale_at)) \
                 .delete(synchronize_session=False)
 
             session.commit()
@@ -69,7 +70,8 @@ def remove_stale_pending_store_tokens(session_maker):
                       "finished.")
         except (sqlalchemy.exc.OperationalError,
                 sqlalchemy.exc.ProgrammingError) as ex:
-            LOG.error("Failed to remove stale pending store tokens: %s", str(ex))
+            LOG.error("Failed to remove stale pending store tokens: %s",
+                      str(ex))
 
 
 def remove_unused_files(session_maker):

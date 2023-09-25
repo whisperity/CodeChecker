@@ -11,6 +11,7 @@ SQLAlchemy ORM model for the analysis run storage database.
 from datetime import datetime, timedelta
 from math import ceil
 import os
+from typing import Optional
 
 from sqlalchemy import MetaData, Column, Integer, UniqueConstraint, String, \
     DateTime, Boolean, ForeignKey, Binary, Enum, Table, Text
@@ -117,7 +118,7 @@ class PendingRunStore(Base):
     finished_at = Column(DateTime, nullable=True)
     comment = Column(String, nullable=True)
 
-    def __init__(self, run_name, username=None):
+    def __init__(self, run_name: str, username: Optional[str] = None):
         self.status = "ongoing"
         self.name = run_name
         self.username = username
@@ -129,7 +130,7 @@ class PendingRunStore(Base):
         self.status = "successful"
         self.finished_at = datetime.now()
 
-    def set_failed(self, failure_reason=None):
+    def set_failed(self, failure_reason: Optional[str] = None):
         self.status = "failed"
         self.finished_at = datetime.now()
         self.comment = failure_reason
