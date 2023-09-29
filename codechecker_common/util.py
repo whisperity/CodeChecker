@@ -9,9 +9,9 @@
 Util module.
 """
 
-
 import itertools
 import json
+import os
 import portalocker
 
 from codechecker_common.logger import get_logger
@@ -84,3 +84,11 @@ def load_json(path: str, default=None, lock=False, display_warning=True):
             LOG.warning(ex)
 
     return ret
+
+
+def generate_random_token(bytes: int = 32) -> str:
+    """
+    Returns a random-generated string usable as a token with bytes number of
+    hexadecimal characters in the output.
+    """
+    return os.urandom(bytes // 2).hex()

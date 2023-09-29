@@ -28,7 +28,7 @@ from ..database.database import DBSession
 from ..permissions import handler_from_scope_params as make_handler, \
     require_manager, require_permission
 from ..server import permissions
-from ..session_manager import generate_session_token
+from ..session_manager import generate_random_token, SESSION_TOKEN_LENGTH
 
 LOG = get_logger('server')
 
@@ -367,7 +367,7 @@ class ThriftAuthHandler:
         """
         self.__require_privilaged_access()
         with DBSession(self.__config_db) as session:
-            token = generate_session_token()
+            token = generate_random_token(SESSION_TOKEN_LENGTH)
             user = self.getLoggedInUser()
             groups = ';'.join(self.__auth_session.groups)
             session_token = Session(token, user, groups, description, False)

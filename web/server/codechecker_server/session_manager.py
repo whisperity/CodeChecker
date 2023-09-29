@@ -13,13 +13,12 @@ import hashlib
 import json
 import os
 import re
-import uuid
 
 from datetime import datetime
 from typing import Optional
 
 from codechecker_common.logger import get_logger
-from codechecker_common.util import load_json
+from codechecker_common.util import load_json, generate_random_token
 
 from codechecker_web.shared.env import check_file_owner_rw
 from codechecker_web.shared.version import SESSION_COOKIE_NAME as _SCN
@@ -44,13 +43,7 @@ except ImportError:
 
 LOG = get_logger("server")
 SESSION_COOKIE_NAME = _SCN
-
-
-def generate_session_token():
-    """
-    Returns a random session token.
-    """
-    return uuid.UUID(bytes=os.urandom(16)).hex
+SESSION_TOKEN_LENGTH = 32
 
 
 def get_worker_processes(scfg_dict):
@@ -619,7 +612,7 @@ class SessionManager:
             return False
 
         # Generate a new token and create a local session.
-        token = generate_session_token()
+        token = generate_random_token(SESSION_TOKEN_LENGTH)
         user_name = validation.get('username')
         groups = validation.get('groups', [])
         is_root = validation.get('root', False)

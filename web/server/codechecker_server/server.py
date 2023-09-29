@@ -50,6 +50,7 @@ from codechecker_api.ServerInfo_v6 import \
     serverInfoService as ServerInfoAPI_v6
 
 from codechecker_common.logger import get_logger
+from codechecker_common.util import generate_random_token
 
 from codechecker_web.shared.version import get_version_str
 
@@ -57,8 +58,6 @@ from . import instance_manager
 from . import permissions
 from . import routing
 from . import session_manager
-
-from .tmp import get_tmp_dir_hash
 
 from .api.authentication import ThriftAuthHandler as AuthHandler_v6
 from .api.config_handler import ThriftConfigHandler as ConfigHandler_v6
@@ -951,7 +950,7 @@ class CCSimpleHttpServerIPv6(CCSimpleHttpServer):
         return "[%s]:%d" % (self.address, self.port)
 
 
-def __make_root_file(root_file):
+def __make_root_file(root_file: str) -> str:
     """
     Generate a root username and password SHA. This hash is saved to the
     given file path, and is also returned.
@@ -960,7 +959,7 @@ def __make_root_file(root_file):
     LOG.debug("Generating initial superuser (root) credentials...")
 
     username = ''.join(sample("ABCDEFGHIJKLMNOPQRSTUVWXYZ", 6))
-    password = get_tmp_dir_hash()[:8]
+    password = generate_random_token(8)
 
     LOG.info("A NEW superuser credential was generated for the server. "
              "This information IS SAVED, thus subsequent server starts "
@@ -988,31 +987,36 @@ def __make_root_file(root_file):
     return secret
 
 
-def start_server(config_directory, package_data, port: int, config_sql_server,
-                 listen_address: str, force_auth, skip_db_cleanup,
-                 context, check_env):
+def __load_or_create_root_file(config_directory: str) -> str:
     """
-    Start http server to handle web client and thrift requests.
-    """
-    LOG.debug("Starting CodeChecker server...")
+    Loads the stored hashed superuser (root) user name and password for the
+    server, or creates an automatically generated one if such does not exist.
 
+    Returns the SHA-hashed expected username and password of root.
+    """
     root_file = os.path.join(config_directory, 'root.user')
     if not os.path.exists(root_file):
         LOG.warning("Server started without 'root.user' present in "
                     "CONFIG_DIRECTORY!")
-        root_sha = __make_root_file(root_file)
     else:
         LOG.debug("Root file was found. Loading...")
         try:
             with open(root_file, 'r', encoding="utf-8", errors="ignore") as f:
                 root_sha = f.read()
-            LOG.debug("Root digest is '%s'", root_sha)
+                LOG.debug("Root digest is '%s'", root_sha)
+                return root_sha
         except IOError:
             LOG.info("Cannot open root file '%s' even though it exists",
                      root_file)
-            root_sha = __make_root_file(root_file)
 
-    # Check whether configuration file exists, create an example if not.
+    return __make_root_file(root_file)
+
+
+def __find_or_create_server_config_file(config_directory: str) -> str:
+    """
+    Check whether configuration file exists, create an example if not.
+    Returns the path of the configuration file.
+    """
     server_cfg_file = os.path.join(config_directory, 'server_config.json')
     if not os.path.exists(server_cfg_file):
         # For backward compatibility reason if the session_config.json file
@@ -1031,20 +1035,29 @@ def start_server(config_directory, package_data, port: int, config_sql_server,
             LOG.info("CodeChecker server's example configuration file "
                      "created at '%s'", server_cfg_file)
             shutil.copyfile(example_cfg_file, server_cfg_file)
+    return server_cfg_file
+
+
+def start_server(config_directory, package_data, port: int, config_sql_server,
+                 listen_address: str, force_auth, skip_db_cleanup,
+                 context, check_env):
+    """
+    Start http server to handle web client and thrift requests.
+    """
+    LOG.info("Begin starting CodeChecker server...")
+
+    root_sha = __load_or_create_root_file(config_directory)
+    server_cfg_file = __find_or_create_server_config_file(config_directory)
 
     try:
         manager = session_manager.SessionManager(
             server_cfg_file,
             root_sha,
             force_auth)
-    except IOError as ioerr:
-        LOG.debug(ioerr)
-        LOG.error("The server's configuration file "
-                  "is missing or can not be read!")
-        sys.exit(1)
-    except ValueError as verr:
-        LOG.debug(verr)
-        LOG.error("The server's configuration file is invalid!")
+    except (IOError, ValueError) as err:
+        LOG.debug(err)
+        LOG.error("The server's configuration file is missing or can not "
+                  "be read!")
         sys.exit(1)
 
     server_clazz = CCSimpleHttpServer
@@ -1094,9 +1107,6 @@ def start_server(config_directory, package_data, port: int, config_sql_server,
     except IOError as ex:
         LOG.debug(ex.strerror)
 
-    LOG.info("Server waiting for client requests on [%s]",
-             http_server.formatted_address)
-
     def unregister_handler(pid):
         """
         Handle errors during instance unregistration.
@@ -1110,6 +1120,10 @@ def start_server(config_directory, package_data, port: int, config_sql_server,
 
     atexit.register(unregister_handler, os.getpid())
 
+    requested_worker_threads = manager.worker_processes
+    LOG.info("Spawning %d API request handler processes...",
+             requested_worker_threads)
+
     for _ in range(manager.worker_processes - 1):
         p = Process(target=http_server.serve_forever)
         processes.append(p)
@@ -1120,6 +1134,9 @@ def start_server(config_directory, package_data, port: int, config_sql_server,
 
     if sys.platform != "win32":
         signal.signal(signal.SIGHUP, reload_signal_handler)
+
+    LOG.info("Server waiting for client requests on [%s]",
+             http_server.formatted_address)
 
     # Main process also acts as a worker.
     http_server.serve_forever()
