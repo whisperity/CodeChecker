@@ -57,7 +57,7 @@ from codechecker_web.shared.version import get_version_str
 from . import instance_manager
 from . import permissions
 from . import routing
-from . import session_manager
+from .session_manager import SessionManager, SESSION_COOKIE_NAME
 
 from .api.authentication import ThriftAuthHandler as AuthHandler_v6
 from .api.config_handler import ThriftConfigHandler as ConfigHandler_v6
@@ -118,7 +118,7 @@ class RequestHandler(SimpleHTTPRequestHandler):
         cookie was found in the headers. None, otherwise.
         """
 
-        if not self.server.manager.is_enabled:
+        if not self.server.session_manager.is_enabled:
             return None
 
         session = None
@@ -129,8 +129,8 @@ class RequestHandler(SimpleHTTPRequestHandler):
             for cookie in split:
                 values = cookie.split("=")
                 if len(values) == 2 and \
-                        values[0] == session_manager.SESSION_COOKIE_NAME:
-                    session = self.server.manager.get_session(values[1])
+                        values[0] == SESSION_COOKIE_NAME:
+                    session = self.server.session_manager.get_session(values[1])
 
         if session and session.is_alive:
             # If a valid session token was found and it can still be used,
@@ -196,9 +196,7 @@ class RequestHandler(SimpleHTTPRequestHandler):
             if token:
                 self.send_header(
                     "Set-Cookie",
-                    "{0}={1}; Path=/".format(
-                        session_manager.SESSION_COOKIE_NAME,
-                        token))
+                    "{0}={1}; Path=/".format(SESSION_COOKIE_NAME, token))
 
             # Set the current user name in the header.
             user_name = self.auth_session.user
@@ -348,7 +346,7 @@ class RequestHandler(SimpleHTTPRequestHandler):
         otrans = TTransport.TMemoryBuffer()
         oprot = output_protocol_factory.getProtocol(otrans)
 
-        if self.server.manager.is_enabled and \
+        if self.server.session_manager.is_enabled and \
                 not self.path.endswith(('/Authentication',
                                         '/Configuration',
                                         '/ServerInfo')) and \
@@ -686,7 +684,7 @@ class CCSimpleHttpServer(HTTPServer):
                  pckg_data,
                  context,
                  check_env,
-                 manager):
+                 session_manager: SessionManager):
 
         LOG.debug("Initializing HTTP server...")
 
@@ -696,7 +694,7 @@ class CCSimpleHttpServer(HTTPServer):
         self.version = pckg_data['version']
         self.context = context
         self.check_env = check_env
-        self.manager = manager
+        self.session_manager = session_manager
         self.address, self.port = server_address
         self.__products = {}
 
@@ -704,7 +702,7 @@ class CCSimpleHttpServer(HTTPServer):
         LOG.debug("Creating database engine for CONFIG DATABASE...")
         self.__engine = product_db_sql_server.create_engine()
         self.config_session = sessionmaker(bind=self.__engine)
-        self.manager.set_database_connection(self.config_session)
+        self.session_manager.set_database_connection(self.config_session)
 
         # Load the initial list of products and set up the server.
         cfg_sess = self.config_session()
@@ -770,7 +768,7 @@ class CCSimpleHttpServer(HTTPServer):
         Enable keepalive on the socket and some TCP keepalive configuration
         option based on the server configuration file.
         """
-        if not self.manager.is_keepalive_enabled():
+        if not self.session_manager.is_keepalive_enabled():
             return
 
         keepalive_is_on = self.socket.getsockopt(socket.SOL_SOCKET,
@@ -785,21 +783,21 @@ class CCSimpleHttpServer(HTTPServer):
         if ret:
             LOG.error('Failed to set socket keepalive: %s', ret)
 
-        idle = self.manager.get_keepalive_idle()
+        idle = self.session_manager.get_keepalive_idle()
         if idle:
             ret = self.socket.setsockopt(socket.IPPROTO_TCP,
                                          socket.TCP_KEEPIDLE, idle)
             if ret:
                 LOG.error('Failed to set TCP keepalive idle: %s', ret)
 
-        interval = self.manager.get_keepalive_interval()
+        interval = self.session_manager.get_keepalive_interval()
         if interval:
             ret = self.socket.setsockopt(socket.IPPROTO_TCP,
                                          socket.TCP_KEEPINTVL, interval)
             if ret:
                 LOG.error('Failed to set TCP keepalive interval: %s', ret)
 
-        max_probe = self.manager.get_keepalive_max_probe()
+        max_probe = self.session_manager.get_keepalive_max_probe()
         if max_probe:
             ret = self.socket.setsockopt(socket.IPPROTO_TCP,
                                          socket.TCP_KEEPCNT, max_probe)
@@ -1044,13 +1042,13 @@ def start_server(config_directory, package_data, port: int, config_sql_server,
     """
     Start http server to handle web client and thrift requests.
     """
-    LOG.info("Begin starting CodeChecker server...")
+    LOG.debug("Begin starting CodeChecker server...")
 
     root_sha = __load_or_create_root_file(config_directory)
     server_cfg_file = __find_or_create_server_config_file(config_directory)
 
     try:
-        manager = session_manager.SessionManager(
+        session_manager = SessionManager(
             server_cfg_file,
             root_sha,
             force_auth)
@@ -1075,7 +1073,7 @@ def start_server(config_directory, package_data, port: int, config_sql_server,
                                package_data,
                                context,
                                check_env,
-                               manager)
+                               session_manager)
 
     processes = []
 
@@ -1097,7 +1095,7 @@ def start_server(config_directory, package_data, port: int, config_sql_server,
         """
         Reloads server configuration file.
         """
-        manager.reload_config()
+        session_manager.reload_config()
 
     try:
         instance_manager.register(os.getpid(),
@@ -1120,11 +1118,11 @@ def start_server(config_directory, package_data, port: int, config_sql_server,
 
     atexit.register(unregister_handler, os.getpid())
 
-    requested_worker_threads = manager.worker_processes
+    requested_worker_threads = session_manager.worker_processes
     LOG.info("Spawning %d API request handler processes...",
              requested_worker_threads)
 
-    for _ in range(manager.worker_processes - 1):
+    for _ in range(requested_worker_threads - 1):
         p = Process(target=http_server.serve_forever)
         processes.append(p)
         p.start()

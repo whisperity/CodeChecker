@@ -153,6 +153,10 @@ class SessionManager:
     CodeChecker server.
     """
 
+    # FIXME: This class should be refactored and split up between a "Config"
+    # or "ConfigManager", and a dedicated session-creation/destruction
+    # "SessionManager" object. Currently, it does both of these things.
+
     def __init__(self, configuration_file, root_sha, force_auth=False):
         """
         Initialise a new Session Manager on the server.
