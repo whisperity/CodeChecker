@@ -812,7 +812,7 @@ def main(args):
 
         LOG.info("Storing results to the server...")
 
-        LOG.info("Running a legacy store first...")
+        # LOG.info("Running a legacy store first...")
         # FIXME: This should be torn out once the asynch store is done.
         client.massStoreRun(args.name,
                             args.tag if 'tag' in args else None,
@@ -822,19 +822,22 @@ def main(args):
                             trim_path_prefixes,
                             description)
 
-        LOG.info("Running asynchronous store...")
-        pending_store_token = client.massStoreRunAsynchronous(
-            b64zip,
-            SubmittedRunOptions(
-                runName=args.name,
-                tag=args.tag if 'tag' in args else None,
-                version=str(context.version),
-                force='force' in args,
-                trimPathPrefixes=trim_path_prefixes,
-                description=description))
-
-        LOG.fatal("TODO: Handling of the 'pending_store_token' is TBD.")
-        raise NotImplementedError("TODO.")
+        # FIXME: Do not run this yet to ensure whatever is in the test code
+        # can still pass using *only* the old logic until the serverside
+        # refactoring and implementation concludes.
+        # LOG.info("Running asynchronous store...")
+        # pending_store_token = client.massStoreRunAsynchronous(
+        #     b64zip,
+        #     SubmittedRunOptions(
+        #         runName=args.name,
+        #         tag=args.tag if 'tag' in args else None,
+        #         version=str(context.version),
+        #         force='force' in args,
+        #         trimPathPrefixes=trim_path_prefixes,
+        #         description=description))
+        #
+        # LOG.fatal("TODO: Handling of the 'pending_store_token' is TBD.")
+        # raise NotImplementedError("TODO.")
 
         # Storing analysis statistics if the server allows them.
         if client.allowsStoringAnalysisStatistics():
