@@ -24,6 +24,7 @@ import socket
 import ssl
 import sys
 import stat
+import typing
 import urllib
 
 from http.server import HTTPServer, BaseHTTPRequestHandler, \
@@ -75,13 +76,13 @@ LOG = get_logger('server')
 
 
 class RequestHandler(SimpleHTTPRequestHandler):
-    """
-    Handle thrift and browser requests
-    Simply modified and extended version of SimpleHTTPRequestHandler
-    """
-    auth_session = None
+    """Handle Thrift RPC and Browser HTTP requests."""
 
     def __init__(self, request, client_address, server):
+        # Using the superclass BaseHTTPRequestHandler here instead of our
+        # direct superclass, SimpleHTTPRequestHandler, is seemingly
+        # intentional. do_GET() is overridden to serve the appropriate raw
+        # file content endpoints directly.
         BaseHTTPRequestHandler.__init__(self,
                                         request,
                                         client_address,
@@ -163,7 +164,7 @@ class RequestHandler(SimpleHTTPRequestHandler):
                 self.auth_session)
 
     def __handle_readiness(self):
-        """ Handle readiness probe. """
+        """ Handle Kubernetes Readiness probe. """
         try:
             cfg_sess = self.server.config_session()
             cfg_sess.query(ORMConfiguration).count()
@@ -181,7 +182,7 @@ class RequestHandler(SimpleHTTPRequestHandler):
                 cfg_sess.commit()
 
     def __handle_liveness(self):
-        """ Handle liveness probe. """
+        """ Handle Kubernetes liveness probe. """
         self.send_response(200)
         self.end_headers()
         self.wfile.write(b'CODECHECKER_SERVER_IS_LIVE')
@@ -242,16 +243,13 @@ class RequestHandler(SimpleHTTPRequestHandler):
 
         if self.path == '/':
             self.path = 'index.html'
-            SimpleHTTPRequestHandler.do_GET(self)
-            return
+            return SimpleHTTPRequestHandler.do_GET(self)
 
+        # Kubernetes cluster probe endpoints.
         if self.path == '/live':
-            self.__handle_liveness()
-            return
-
+            return self.__handle_liveness()
         if self.path == '/ready':
-            self.__handle_readiness()
-            return
+            return self.__handle_readiness()
 
         product_endpoint, _ = routing.split_client_GET_request(self.path)
 
@@ -507,10 +505,6 @@ class Product:
     a separate database (and database connection) with its own access control.
     """
 
-    # The amount of SECONDS that need to pass after the last unsuccessful
-    # connect() call so the next could be made.
-    CONNECT_RETRY_TIMEOUT = 300
-
     def __init__(self, orm_object, context, check_env):
         """
         Set up a new managed product object for the configuration given.
@@ -680,15 +674,12 @@ class Product:
 
 
 class CCSimpleHttpServer(HTTPServer):
-    """
-    Simple http server to handle requests from the clients.
-    """
+    """Simple HTTP server to handle requests from the clients."""
 
-    daemon_threads = False
     address_family = socket.AF_INET  # IPv4
 
     def __init__(self,
-                 server_address,
+                 server_address: typing.Tuple[str, int],
                  RequestHandlerClass,
                  config_directory,
                  product_db_sql_server,
@@ -707,6 +698,7 @@ class CCSimpleHttpServer(HTTPServer):
         self.context = context
         self.check_env = check_env
         self.manager = manager
+        self.address, self.port = server_address
         self.__products = {}
 
         # Create a database engine for the configuration database.
@@ -736,7 +728,7 @@ class CCSimpleHttpServer(HTTPServer):
                     LOG.warning("Cleaning database for %s Failed.", endpoint)
 
         try:
-            HTTPServer.__init__(self, server_address,
+            HTTPServer.__init__(self, (self.address, self.port),
                                 RequestHandlerClass,
                                 bind_and_activate=True)
             ssl_key_file = os.path.join(config_directory, "key.pem")
@@ -768,6 +760,11 @@ class CCSimpleHttpServer(HTTPServer):
         except Exception as e:
             LOG.error("Couldn't start the server: %s", e.__str__())
             raise
+
+        # If the server was started with the port 0, the OS will pick an
+        # available port. For this reason we will update the port variable
+        # after server initialization.
+        self.port = self.socket.getsockname()[1]
 
     def configure_keepalive(self):
         """
@@ -934,6 +931,10 @@ class CCSimpleHttpServer(HTTPServer):
             for ep in list(self.__products)
             if ep not in endpoints_to_keep]
 
+    @property
+    def formatted_address(self) -> str:
+        return "%s:%d" % (self.address, self.port)
+
 
 class CCSimpleHttpServerIPv6(CCSimpleHttpServer):
     """
@@ -944,6 +945,10 @@ class CCSimpleHttpServerIPv6(CCSimpleHttpServer):
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
+
+    @property
+    def formatted_address(self) -> str:
+        return "[%s]:%d" % (self.address, self.port)
 
 
 def __make_root_file(root_file):
@@ -983,15 +988,13 @@ def __make_root_file(root_file):
     return secret
 
 
-def start_server(config_directory, package_data, port, config_sql_server,
-                 listen_address, force_auth, skip_db_cleanup,
+def start_server(config_directory, package_data, port: int, config_sql_server,
+                 listen_address: str, force_auth, skip_db_cleanup,
                  context, check_env):
     """
     Start http server to handle web client and thrift requests.
     """
     LOG.debug("Starting CodeChecker server...")
-
-    server_addr = (listen_address, port)
 
     root_file = os.path.join(config_directory, 'root.user')
     if not os.path.exists(root_file):
@@ -1045,13 +1048,13 @@ def start_server(config_directory, package_data, port, config_sql_server,
         sys.exit(1)
 
     server_clazz = CCSimpleHttpServer
-    if ':' in server_addr[0]:
+    if ':' in listen_address:
         # IPv6 address specified for listening.
         # FIXME: Python>=3.8 automatically handles IPv6 if ':' is in the bind
         # address, see https://bugs.python.org/issue24209.
         server_clazz = CCSimpleHttpServerIPv6
 
-    http_server = server_clazz(server_addr,
+    http_server = server_clazz((listen_address, port),
                                RequestHandler,
                                config_directory,
                                config_sql_server,
@@ -1061,21 +1064,14 @@ def start_server(config_directory, package_data, port, config_sql_server,
                                check_env,
                                manager)
 
-    # If the server was started with the port 0, the OS will pick an available
-    # port. For this reason we will update the port variable after server
-    # initialization.
-    port = http_server.socket.getsockname()[1]
-
     processes = []
 
     def signal_handler(signum, frame):
         """
         Handle SIGTERM to stop the server running.
         """
-        LOG.info("Shutting down the WEB server on [%s:%d]",
-                 '[' + listen_address + ']'
-                 if server_clazz is CCSimpleHttpServerIPv6 else listen_address,
-                 port)
+        LOG.info("Shutting down the WEB server on [%s]",
+                 http_server.formatted_address)
         http_server.terminate()
 
         # Terminate child processes.
@@ -1098,10 +1094,8 @@ def start_server(config_directory, package_data, port, config_sql_server,
     except IOError as ex:
         LOG.debug(ex.strerror)
 
-    LOG.info("Server waiting for client requests on [%s:%d]",
-             '[' + listen_address + ']'
-             if server_clazz is CCSimpleHttpServerIPv6 else listen_address,
-             port)
+    LOG.info("Server waiting for client requests on [%s]",
+             http_server.formatted_address)
 
     def unregister_handler(pid):
         """

@@ -939,12 +939,13 @@ service codeCheckerDBAccess {
                                                    throws (1: codechecker_api_shared.RequestFailed requestError),
 
   // This function stores an entire run encapsulated and sent in a ZIP file.
-  // The ZIP file has to be compressed and sent as a base64 encoded string. The
-  // ZIP file must contain a "reports" and an optional "root" sub-folder.
-  // The former one is the output of 'CodeChecker analyze' command and the
-  // latter one contains the source files on absolute paths starting as if
-  // "root" was the "/" directory. The source files are not necessary to be
-  // wrapped in the ZIP file (see getMissingContentHashes() function).
+  // The ZIP file has to be compressed by ZLib and the compressed buffer
+  // sent as a Base64-encoded string. The ZIP file must contain a "reports" and
+  // an optional "root" sub-directory. The former one is the output of the
+  // 'CodeChecker analyze' command and the latter one contains the source files
+  // on absolute paths starting as if "root" was the "/" directory. The source
+  // files are not necessary to be wrapped in the ZIP file
+  // (see getMissingContentHashes() function).
   //
   // The "version" parameter is the used CodeChecker version which checked this
   // run.
@@ -954,7 +955,8 @@ service codeCheckerDBAccess {
   // process is prone to infinite hangs while waiting for the return value of
   // the Thrift call if the network communication terminates during the time
   // the server is processing the sent data, which might take a very long time.
-  // Clients are expected to use the massStoreRunAsynchronous() function instead!
+  // Appropriately modern clients are expected to use the
+  // massStoreRunAsynchronous() function instead!
   //
   // PERMISSION: PRODUCT_STORE
   i64 massStoreRun(1: string          runName,
@@ -967,11 +969,12 @@ service codeCheckerDBAccess {
                    throws (1: codechecker_api_shared.RequestFailed requestError),
 
   // This function stores an entire analysis run encapsulated and sent as a
-  // ZIP file. The ZIP file must be compressed and sent as a Base64-encoded
-  // string. It must contain a "reports" and an optional "root" sub-directory.
-  // "reports" contains the output of the 'CodeChecker analyze' command, while
-  // "root", if present, contains the source code of the project with their
-  // full paths, with the logical "root" replacing the original "/" directory.
+  // ZIP file. The ZIP file must be compressed by ZLib and sent as a
+  // Base64-encoded string. It must contain a "reports" and an optional "root"
+  // sub-directory. "reports" contains the output of the 'CodeChecker analyze'
+  // command, while "root", if present, contains the source code of the project
+  // with their full paths, with the logical "root" replacing the original
+  // "/" directory.
   //
   // The source files are not necessary to be present in the ZIP, see
   // getMissingContentHashes() for details.
@@ -985,6 +988,8 @@ service codeCheckerDBAccess {
   // as the argument of the checkPendingStoreStatus() for clients to retrieve
   // the processing's state. Clients MAY decide to "detach", i.e., not to wait
   // for the processing of the submitted data, and ignore the returned handle.
+  // Even if the client detached, the processing of the stored reports will
+  // eventually conclude.
   //
   // PERMISSION: PRODUCT_STORE
   AsynchronousRunStoreHandle massStoreRunAsynchronous(
@@ -997,7 +1002,8 @@ service codeCheckerDBAccess {
   // (both successfully or erroneously), the pending result is consumed and
   // deleted from the database.
   //
-  // Only the user who iniated the processing may check its status.
+  // If the server enabled authentication, only the user who iniated the
+  // processing may check its status.
   //
   // PERMISSION: PRODUCT_STORE
   AsynchronousRunStoreResult checkPendingStoreStatus(

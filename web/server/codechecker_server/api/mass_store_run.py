@@ -71,9 +71,9 @@ SourceLineComments = List[Any]
 
 def unzip(b64zip: str, output_dir: str) -> int:
     """
-    This function unzips the base64 encoded zip file. This zip is extracted
-    to a temporary directory and the ZIP is then deleted. The function returns
-    the size of the extracted decompressed zip file.
+    This function unzips a Base64 encoded and ZLib-compressed ZIP file. This
+    ZIP is extracted to a temporary directory and the ZIP is then deleted.
+    The function returns the size of the extracted decompressed ZIP file.
     """
     if len(b64zip) == 0:
         return 0
@@ -92,11 +92,10 @@ def unzip(b64zip: str, output_dir: str) -> int:
                 import traceback
                 traceback.print_exc()
                 raise
-    return 0
 
 
 def get_file_content(file_path: str) -> bytes:
-    """Return the file content for the given filepath. """
+    """Return the file content for the given filepath."""
     with open(file_path, 'rb') as f:
         return f.read()
 
@@ -107,7 +106,7 @@ def parse_codechecker_review_comment(
     checker_name: str
 ) -> SourceLineComments:
     """Parse the CodeChecker review comments from a source file at a given
-    position.  Returns an empty list if there are no comments.
+    position. Returns an empty list if there are no comments.
     """
     src_comment_data = []
     with open(source_file_name, encoding='utf-8', errors='ignore') as f:
