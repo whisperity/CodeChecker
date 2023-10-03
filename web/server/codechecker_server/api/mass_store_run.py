@@ -256,7 +256,7 @@ class MassStoreRun:
 
     @property
     def __manager(self):
-        return self.__report_server._manager
+        return self.__report_server._session_manager
 
     @property
     def __Session(self):

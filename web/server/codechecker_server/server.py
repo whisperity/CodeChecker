@@ -16,6 +16,7 @@ import datetime
 from hashlib import sha256
 from multiprocessing import Process
 import os
+import pathlib
 import posixpath
 from random import sample
 import shutil
@@ -54,9 +55,7 @@ from codechecker_common.util import generate_random_token
 
 from codechecker_web.shared.version import get_version_str
 
-from . import instance_manager
-from . import permissions
-from . import routing
+from . import instance_manager, permissions, routing, server_configuration
 from .session_manager import SessionManager, SESSION_COOKIE_NAME
 
 from .api.authentication import ThriftAuthHandler as AuthHandler_v6
@@ -130,7 +129,8 @@ class RequestHandler(SimpleHTTPRequestHandler):
                 values = cookie.split("=")
                 if len(values) == 2 and \
                         values[0] == SESSION_COOKIE_NAME:
-                    session = self.server.session_manager.get_session(values[1])
+                    session = self.server.session_manager.get_session(
+                        values[1])
 
         if session and session.is_alive:
             # If a valid session token was found and it can still be used,
@@ -384,7 +384,7 @@ class RequestHandler(SimpleHTTPRequestHandler):
                 if major_version == 6:
                     if request_endpoint == 'Authentication':
                         auth_handler = AuthHandler_v6(
-                            self.server.manager,
+                            self.server.session_manager,
                             self.auth_session,
                             self.server.config_session)
                         processor = AuthAPI_v6.Processor(auth_handler)
@@ -420,7 +420,7 @@ class RequestHandler(SimpleHTTPRequestHandler):
                             product = self.__check_prod_db(product_endpoint)
 
                         acc_handler = ReportHandler_v6(
-                            self.server.manager,
+                            self.server.session_manager,
                             product.session_factory,
                             product,
                             self.auth_session,
@@ -694,7 +694,7 @@ class CCSimpleHttpServer(HTTPServer):
         self.version = pckg_data['version']
         self.context = context
         self.check_env = check_env
-        self.session_manager = session_manager
+        self.session_manager: SessionManager = session_manager
         self.address, self.port = server_address
         self.__products = {}
 
@@ -1010,32 +1010,6 @@ def __load_or_create_root_file(config_directory: str) -> str:
     return __make_root_file(root_file)
 
 
-def __find_or_create_server_config_file(config_directory: str) -> str:
-    """
-    Check whether configuration file exists, create an example if not.
-    Returns the path of the configuration file.
-    """
-    server_cfg_file = os.path.join(config_directory, 'server_config.json')
-    if not os.path.exists(server_cfg_file):
-        # For backward compatibility reason if the session_config.json file
-        # exists we rename it to server_config.json.
-        session_cfg_file = os.path.join(config_directory,
-                                        'session_config.json')
-        example_cfg_file = os.path.join(os.environ['CC_DATA_FILES_DIR'],
-                                        'config', 'server_config.json')
-        if os.path.exists(session_cfg_file):
-            LOG.info("Renaming '%s' to '%s'. Please check the example "
-                     "configuration file ('%s') or the user guide for more "
-                     "information.", session_cfg_file,
-                     server_cfg_file, example_cfg_file)
-            os.rename(session_cfg_file, server_cfg_file)
-        else:
-            LOG.info("CodeChecker server's example configuration file "
-                     "created at '%s'", server_cfg_file)
-            shutil.copyfile(example_cfg_file, server_cfg_file)
-    return server_cfg_file
-
-
 def start_server(config_directory, package_data, port: int, config_sql_server,
                  listen_address: str, force_auth, skip_db_cleanup,
                  context, check_env):
@@ -1045,8 +1019,19 @@ def start_server(config_directory, package_data, port: int, config_sql_server,
     LOG.debug("Begin starting CodeChecker server...")
 
     root_sha = __load_or_create_root_file(config_directory)
-    server_cfg_file = __find_or_create_server_config_file(config_directory)
 
+    try:
+        configuration = server_configuration.ServerConfiguration.factory(
+            pathlib.Path(config_directory))
+    except (OSError, ValueError) as err:
+        LOG.debug(err)
+        LOG.error("The server's configuration file is missing, can not "
+                  "be read, or is in an invalid format!")
+        import traceback
+        traceback.print_exc()
+        sys.exit(1)
+
+    server_cfg_file = os.path.join(config_directory, "server_config.json")
     try:
         session_manager = SessionManager(
             server_cfg_file,
@@ -1118,7 +1103,7 @@ def start_server(config_directory, package_data, port: int, config_sql_server,
 
     atexit.register(unregister_handler, os.getpid())
 
-    requested_worker_threads = session_manager.worker_processes
+    requested_worker_threads = configuration.worker_processes
     LOG.info("Spawning %d API request handler processes...",
              requested_worker_threads)
 

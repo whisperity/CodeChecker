@@ -46,24 +46,6 @@ SESSION_COOKIE_NAME = _SCN
 SESSION_TOKEN_LENGTH = 32
 
 
-def get_worker_processes(scfg_dict):
-    """
-    Return number of worker processes from the config dictionary.
-
-    Return 'worker_processes' field from the config dictionary or returns the
-    default value if this field is not set or the value is negative.
-    """
-    default = os.cpu_count()
-    worker_processes = scfg_dict.get('worker_processes', default)
-
-    if worker_processes < 0:
-        LOG.warning("Number of worker processes can not be negative! Default "
-                    "value will be used: %s", default)
-        worker_processes = default
-
-    return worker_processes
-
-
 class _Session:
     """A session for an authenticated, privileged client connection."""
 
@@ -178,7 +160,6 @@ class SessionManager:
         # so it should NOT be handled by session_manager. A separate config
         # handler for the server's stuff should be created, that can properly
         # instantiate SessionManager with the found configuration.
-        self.__worker_processes = get_worker_processes(scfg_dict)
         self.__max_run_count = scfg_dict.get('max_run_count', None)
         self.__store_config = scfg_dict.get('store', {})
         self.__keepalive_config = scfg_dict.get('keepalive', {})
@@ -319,10 +300,6 @@ class SessionManager:
     @property
     def is_enabled(self):
         return self.__auth_config.get('enabled')
-
-    @property
-    def worker_processes(self):
-        return self.__worker_processes
 
     def get_realm(self):
         return {
