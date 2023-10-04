@@ -246,7 +246,8 @@ class Option:
             return value
         except KeyError:
             if not self.has_default:
-                raise
+                raise KeyError("%s (%s) with no default not set in "
+                               "configuration" % (self.name, self.path))
             return self.default
 
     def set(self, configuration: Dict, value: Any):
@@ -403,22 +404,50 @@ class Configuration:
                              % str(config_file))
 
         for opt in self.__dict__[_K_OPTION_STORE].values():
-            old, new = opt(current_cfg), opt(new_cfg)
+            # Do not let anything to happen with the current configuration
+            # if there is a "schema mismatch" between what is in memory and
+            # what keys exist in the file. The user MUST appropriately restart
+            # the server in case a configuration option is added or removed
+            # without an appropriate default= being set up in the Option()
+            # constructor, as accesses to the value will result in exceptions
+            # elsewhere.
+            try:
+                old = opt(current_cfg)
+            except KeyError:
+                LOG.error("Failed to load value of '%s' from the current "
+                          "configuration, and this option does NOT have a "
+                          "default. Please check and update your "
+                          "configuration file, and restart! The server will "
+                          "keep considering the value UNCONFIGURED!", opt.name)
+                continue
+            try:
+                new = opt(new_cfg)
+            except KeyError:
+                LOG.error("Failed to load value of '%s' from the disk. "
+                          "This option does NOT have a default. Please check "
+                          "and update your configuration file, and restart! "
+                          "The server will keep using the old value...",
+                          opt.name)
+                continue
+
             if old == new:
                 # No change in the configured value, nothing to do.
                 continue
 
             if not opt.is_dynamically_updatable:
-                LOG.warning("Value of config option '%s' (in file '%s') "
-                            "changed from '%s' to '%s', but this option "
-                            "does not support on-the-fly reloading.\n"
+                LOG.warning("Value of config option '%s' changed from "
+                            "'%s' to '%s', but this option does not support "
+                            "on-the-fly reloading.\n"
                             "You MUST restart the server for the new "
                             "configuration to apply!",
-                            opt.name, config_file, str(old), str(new))
+                            opt.name, str(old), str(new))
                 continue
 
             try:
                 opt._update(current_cfg, new_cfg)
+                LOG.info("Value of config option '%s' changed from "
+                         "'%s' to '%s'.",
+                         opt.name, str(old), str(new))
                 updated_opts.append(opt.name)
             except Exception:
                 LOG.warning("Failed to on-the-fly reload '%s'",
