@@ -255,8 +255,12 @@ class MassStoreRun:
         self.__added_reports: List[Tuple[DBReport, Report]] = list()
 
     @property
-    def __manager(self):
+    def __session_manager(self):
         return self.__report_server._session_manager
+
+    @property
+    def __configuration_manager(self):
+        return self.__report_server._configuration_manager
 
     @property
     def __Session(self):
@@ -282,7 +286,7 @@ class MassStoreRun:
         """
         Checks the maximum allowed of uploadable runs for the current product.
         """
-        max_run_count = self.__manager.get_max_run_count()
+        max_run_count = self.__configuration_manager.max_run_count
 
         with DBSession(self.__config_database) as session:
             product = session.query(Product).get(self.__product.id)

@@ -159,7 +159,6 @@ class SessionManager:
         # so it should NOT be handled by session_manager. A separate config
         # handler for the server's stuff should be created, that can properly
         # instantiate SessionManager with the found configuration.
-        self.__max_run_count = scfg_dict.get('max_run_count', None)
         self.__store_config = scfg_dict.get('store', {})
         self.__keepalive_config = scfg_dict.get('keepalive', {})
         self.__auth_config = scfg_dict['authentication']
@@ -250,13 +249,6 @@ class SessionManager:
         LOG.info("Reload server configuration file...")
         try:
             cfg_dict = self.__get_config_dict()
-
-            prev_max_run_count = self.__max_run_count
-            new_max_run_count = cfg_dict.get('max_run_count', None)
-            if prev_max_run_count != new_max_run_count:
-                self.__max_run_count = new_max_run_count
-                LOG.debug("Changed 'max_run_count' value from %s to %s",
-                          prev_max_run_count, new_max_run_count)
 
             prev_store_config = json.dumps(self.__store_config, sort_keys=True,
                                            indent=2)
@@ -617,13 +609,6 @@ class SessionManager:
                     transaction.close()
 
         return local_session
-
-    def get_max_run_count(self):
-        """
-        Returns the maximum storable run count. If the value is None it means
-        we can upload unlimited number of runs.
-        """
-        return self.__max_run_count
 
     def get_analysis_statistics_dir(self):
         """

@@ -384,6 +384,7 @@ class RequestHandler(SimpleHTTPRequestHandler):
                 if major_version == 6:
                     if request_endpoint == 'Authentication':
                         auth_handler = AuthHandler_v6(
+                            self.server.configuration_manager,
                             self.server.session_manager,
                             self.auth_session,
                             self.server.config_session)
@@ -420,6 +421,7 @@ class RequestHandler(SimpleHTTPRequestHandler):
                             product = self.__check_prod_db(product_endpoint)
 
                         acc_handler = ReportHandler_v6(
+                            self.server.configuration_manager,
                             self.server.session_manager,
                             product.session_factory,
                             product,
@@ -684,6 +686,7 @@ class CCSimpleHttpServer(HTTPServer):
                  pckg_data,
                  context,
                  check_env,
+                 configuration_manager: server_configuration.Configuration,
                  session_manager: SessionManager):
 
         LOG.debug("Initializing HTTP server...")
@@ -694,7 +697,8 @@ class CCSimpleHttpServer(HTTPServer):
         self.version = pckg_data['version']
         self.context = context
         self.check_env = check_env
-        self.session_manager: SessionManager = session_manager
+        self.configuration_manager = configuration_manager
+        self.session_manager = session_manager
         self.address, self.port = server_address
         self.__products = {}
 
@@ -1058,6 +1062,7 @@ def start_server(config_directory, package_data, port: int, config_sql_server,
                                package_data,
                                context,
                                check_env,
+                               configuration,
                                session_manager)
 
     processes = []
@@ -1080,11 +1085,8 @@ def start_server(config_directory, package_data, port: int, config_sql_server,
         """
         Reloads the server configuration file.
         """
-        print("OLD", configuration.max_run_count, configuration.worker_processes)
-        X = configuration.reload()
-        print("RELOADED", X)
+        configuration.reload()
         session_manager.reload_config()
-        print("NEW", configuration.max_run_count, configuration.worker_processes)
 
     try:
         instance_manager.register(os.getpid(),

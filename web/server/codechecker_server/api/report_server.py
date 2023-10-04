@@ -1268,6 +1268,7 @@ class ThriftRequestHandler:
     """
 
     def __init__(self,
+                 configuration_manager,
                  session_manager,
                  Session,
                  product,
@@ -1281,6 +1282,7 @@ class ThriftRequestHandler:
             raise ValueError("Cannot initialize request handler without "
                              "a product to serve.")
 
+        self._configuration_manager = configuration_manager
         self._session_manager = session_manager
         self._product = product
         self._auth_session = auth_session
