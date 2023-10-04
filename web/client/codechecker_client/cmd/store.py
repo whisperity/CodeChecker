@@ -27,9 +27,9 @@ from concurrent.futures import ProcessPoolExecutor
 from typing import Dict, Iterable, List, Set, Tuple
 
 from codechecker_api.codeCheckerDBAccess_v6.ttypes import StoreLimitKind
-    # AsynchronousRunStoreResult, AsynchronousRunStoreHandle, \
-    # AsynchronousRunStoreStatus, SubmittedRunOptions, \
-    # StoreLimitKind
+# AsynchronousRunStoreResult, AsynchronousRunStoreHandle, \
+# AsynchronousRunStoreStatus, SubmittedRunOptions, \
+# StoreLimitKind
 from codechecker_api_shared.ttypes import RequestFailed, ErrorCode
 
 from codechecker_report_converter import twodim

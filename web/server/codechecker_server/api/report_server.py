@@ -21,7 +21,8 @@ import zlib
 
 from copy import deepcopy
 from collections import OrderedDict, defaultdict
-from datetime import datetime# , timedelta
+# TODO: import timedelta
+from datetime import datetime
 from typing import Dict, List, Optional, Set, Tuple
 
 import sqlalchemy
@@ -30,7 +31,7 @@ from sqlalchemy.sql.expression import or_, and_, not_, func, \
 
 import codechecker_api_shared
 from codechecker_api.codeCheckerDBAccess_v6 import constants, ttypes
-#, AsynchronousRunStoreStatus, \
+# TODO: import AsynchronousRunStoreStatus
 from codechecker_api.codeCheckerDBAccess_v6.ttypes import \
     AnalysisInfoFilter, AsynchronousRunStoreHandle, \
     AsynchronousRunStoreResult, \

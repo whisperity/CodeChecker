@@ -816,7 +816,7 @@ class CCSimpleHttpServer(HTTPServer):
                 LOG.error('Failed to set TCP max keepalive probes: %s', ret)
         else:
             max_probes = self.socket.getsockopt(socket.IPPROTO_TCP,
-                                               socket.TCP_KEEPCNT)
+                                                socket.TCP_KEEPCNT)
             self.configuration_manager.keepalive_max_probes = max_probes
 
     def terminate(self):
