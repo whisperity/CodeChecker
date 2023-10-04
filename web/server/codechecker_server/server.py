@@ -1021,7 +1021,7 @@ def start_server(config_directory, package_data, port: int, config_sql_server,
     root_sha = __load_or_create_root_file(config_directory)
 
     try:
-        configuration = server_configuration.ServerConfiguration.factory(
+        configuration = server_configuration.load_configuration(
             pathlib.Path(config_directory))
     except (OSError, ValueError) as err:
         LOG.debug(err)

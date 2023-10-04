@@ -20,7 +20,6 @@ from typing import Optional
 from codechecker_common.logger import get_logger
 from codechecker_common.util import load_json, generate_random_token
 
-from codechecker_web.shared.env import check_file_owner_rw
 from codechecker_web.shared.version import SESSION_COOKIE_NAME as _SCN
 
 from .database.config_db_model import Session as SessionRecord
@@ -240,9 +239,7 @@ class SessionManager:
         """
         LOG.debug(self.__configuration_file)
         cfg_dict = load_json(self.__configuration_file, {})
-        if cfg_dict != {}:
-            check_file_owner_rw(self.__configuration_file)
-        else:
+        if cfg_dict == {}:
             # If the configuration dict is empty, it means a JSON couldn't
             # have been parsed from it.
             raise ValueError("Server configuration file was invalid, or "
