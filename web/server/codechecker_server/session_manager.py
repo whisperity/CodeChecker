@@ -157,8 +157,6 @@ class SessionManager:
         # so it should NOT be handled by session_manager. A separate config
         # handler for the server's stuff should be created, that can properly
         # instantiate SessionManager with the found configuration.
-        self.__store_config = scfg_dict.get('store', {})
-        self.__keepalive_config = scfg_dict.get('keepalive', {})
         self.__auth_config = scfg_dict['authentication']
 
         if force_auth:
@@ -244,19 +242,9 @@ class SessionManager:
         return cfg_dict
 
     def reload_config(self):
-        LOG.info("Reload server configuration file...")
+        LOG.info("Reload server configuration file (old logic)...")
         try:
             cfg_dict = self.__get_config_dict()
-
-            prev_store_config = json.dumps(self.__store_config, sort_keys=True,
-                                           indent=2)
-            new_store_config_val = cfg_dict.get('store', {})
-            new_store_config = json.dumps(new_store_config_val, sort_keys=True,
-                                          indent=2)
-            if prev_store_config != new_store_config:
-                self.__store_config = new_store_config_val
-                LOG.debug("Updating 'store' config from %s to %s",
-                          prev_store_config, new_store_config)
 
             update_sessions = False
             auth_fields_to_update = ['session_lifetime', 'refresh_time',
@@ -279,7 +267,7 @@ class SessionManager:
                         self.__auth_config['session_lifetime']
                     session.refresh_time = self.__auth_config['refresh_time']
 
-            LOG.info("Done.")
+            LOG.info("Done reloading (old logic).")
         except ValueError as ex:
             LOG.error("Couldn't reload server configuration file")
             LOG.error(str(ex))
@@ -607,49 +595,6 @@ class SessionManager:
                     transaction.close()
 
         return local_session
-
-    def get_analysis_statistics_dir(self):
-        """
-        Get directory where the compressed analysis statistics files should be
-        stored. If the value is None it means we do not want to store
-        analysis statistics information on the server.
-        """
-
-        return self.__store_config.get('analysis_statistics_dir')
-
-    def get_failure_zip_size(self):
-        """
-        Maximum size of the collected failed zips which can be store on the
-        server.
-        """
-        limit = self.__store_config.get('limit', {})
-        return limit.get('failure_zip_size')
-
-    def get_compilation_database_size(self):
-        """
-        Limit of the compilation database file size.
-        """
-        limit = self.__store_config.get('limit', {})
-        return limit.get('compilation_database_size')
-
-    def is_keepalive_enabled(self):
-        """
-        True if the keepalive functionality is explicitly enabled, otherwise it
-        will return False.
-        """
-        return self.__keepalive_config.get('enabled')
-
-    def get_keepalive_idle(self):
-        """ Get keepalive idle time. """
-        return self.__keepalive_config.get('idle')
-
-    def get_keepalive_interval(self):
-        """ Get keepalive interval time. """
-        return self.__keepalive_config.get('interval')
-
-    def get_keepalive_max_probe(self):
-        """ Get keepalive max probe count. """
-        return self.__keepalive_config.get('max_probe')
 
     def __get_local_session_from_db(self, token):
         """

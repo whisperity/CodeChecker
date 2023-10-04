@@ -771,7 +771,7 @@ class CCSimpleHttpServer(HTTPServer):
         Enable keepalive on the socket and some TCP keepalive configuration
         option based on the server configuration file.
         """
-        if not self.session_manager.is_keepalive_enabled():
+        if not self.configuration_manager.enable_keepalive:
             return
 
         keepalive_is_on = self.socket.getsockopt(socket.SOL_SOCKET,
@@ -786,26 +786,38 @@ class CCSimpleHttpServer(HTTPServer):
         if ret:
             LOG.error('Failed to set socket keepalive: %s', ret)
 
-        idle = self.session_manager.get_keepalive_idle()
+        idle = self.configuration_manager.keepalive_time_idle
         if idle:
             ret = self.socket.setsockopt(socket.IPPROTO_TCP,
                                          socket.TCP_KEEPIDLE, idle)
             if ret:
                 LOG.error('Failed to set TCP keepalive idle: %s', ret)
+        else:
+            idle = self.socket.getsockopt(socket.IPPROTO_TCP,
+                                          socket.TCP_KEEPIDLE)
+            self.configuration_manager.keepalive_time_idle = idle
 
-        interval = self.session_manager.get_keepalive_interval()
+        interval = self.configuration_manager.keepalive_time_interval
         if interval:
             ret = self.socket.setsockopt(socket.IPPROTO_TCP,
                                          socket.TCP_KEEPINTVL, interval)
             if ret:
                 LOG.error('Failed to set TCP keepalive interval: %s', ret)
+        else:
+            interval = self.socket.getsockopt(socket.IPPROTO_TCP,
+                                              socket.TCP_KEEPINTVL)
+            self.configuration_manager.keepalive_time_interval = interval
 
-        max_probe = self.session_manager.get_keepalive_max_probe()
-        if max_probe:
+        max_probes = self.configuration_manager.keepalive_max_probes
+        if max_probes:
             ret = self.socket.setsockopt(socket.IPPROTO_TCP,
-                                         socket.TCP_KEEPCNT, max_probe)
+                                         socket.TCP_KEEPCNT, max_probes)
             if ret:
-                LOG.error('Failed to set TCP max keepalive probe: %s', ret)
+                LOG.error('Failed to set TCP max keepalive probes: %s', ret)
+        else:
+            max_probes = self.socket.getsockopt(socket.IPPROTO_TCP,
+                                               socket.TCP_KEEPCNT)
+            self.configuration_manager.keepalive_max_probes = max_probes
 
     def terminate(self):
         """

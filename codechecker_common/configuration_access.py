@@ -45,9 +45,19 @@ class Option:
         def __init__(self, name: str):
             super().__init__("'%s' is not updatable dynamically" % name)
 
+    class ErrorIfUnset:
+        """
+        Tag type to indicate that getting the value of an Option if it is
+        not explicitly configured should raise an error. This must be passed
+        to the 'default' constructor parameter of Option.
+        """
+        def __init__(self):
+            pass
+
     def __init__(self, name: str,
                  path: str,
-                 default: Optional[Union[Any, Callable[[], Any]]] = None,
+                 default: Union[ErrorIfUnset, None, Any,
+                                Callable[[], Any]] = ErrorIfUnset,
                  check: Optional[Callable[[Any], bool]] = None,
                  check_fail_msg: Optional[Union[Callable[[], str],
                                                 str]] = None,
@@ -70,8 +80,9 @@ class Option:
 
         If the accessing fails to get the elements of the configuration
         dictionary and a 'KeyError' or 'IndexError' is hit, the 'default'
-        value, or the result of the 'default' function, if any, is
-        returned. If 'default' is unset, the error is raised unconditionally.
+        value, or the result of the 'default' function, if any, is returned.
+        If 'default' is left as its default 'ErrorIfUnset()' option, the error
+        is explicitly raised to client code.
 
         'check' is an optional callback that is executed every time a
         non-default configuration option is read or a 'settable' option is set.
@@ -109,35 +120,35 @@ class Option:
         self._check_fail_msg = check_fail_msg
 
     @property
-    def name(self):
+    def name(self) -> str:
         return self._name
 
     @property
-    def description(self):
+    def description(self) -> Optional[str]:
         return self._description
 
     @property
-    def path(self):
-        return self._path
+    def path(self) -> str:
+        return str(self._path)
 
     @property
-    def has_default(self):
-        return self._default is not None
+    def has_default(self) -> bool:
+        return self._default != Option.ErrorIfUnset
 
     @property
-    def default(self):
+    def default(self) -> Optional[Any]:
         if not self.has_default:
-            raise KeyError("@default")
+            raise KeyError("%s@default" % self.name)
         if callable(self._default):
             return self._default()
         return self._default
 
     @property
-    def is_writable(self):
+    def is_writable(self) -> bool:
         return self._allow_set
 
     @property
-    def is_dynamically_updatable(self):
+    def is_dynamically_updatable(self) -> bool:
         return self._allow_update
 
     def _descend_to_closest_parent(self, configuration: Dict) \
@@ -194,8 +205,7 @@ class Option:
                             % str(type(parent)))
 
     @classmethod
-    def __set_leaf(cls, parent: Union[Dict, List],
-                   name: str, value: Any) -> Any:
+    def __set_leaf(cls, parent: Union[Dict, List], name: str, value: Any):
         """
         Assigns 'value' to the leaf node, as identified by 'name',
         contained within the 'parent'.
@@ -230,7 +240,7 @@ class Option:
             raise self.CheckFailedError(self._name)
         return True
 
-    def __call__(self, configuration: Dict) -> Any:
+    def __call__(self, configuration: Dict) -> Optional[Any]:
         """Reads and returns the value of the Option."""
         try:
             parent = self._descend_to_closest_parent(configuration)
@@ -240,14 +250,16 @@ class Option:
                 self._run_check(value)
             except Exception:
                 if not self.has_default:
-                    raise ValueError("check() failed for %s" % self.name)
-                return self.default
+                    raise ValueError("check() failed for '%s'" % self.name)
+                LOG.warning("check() failed for value of '%s', substituting "
+                            "with the default value.", self.name)
+                value = self.default
 
             return value
         except KeyError:
             if not self.has_default:
-                raise KeyError("%s (%s) with no default not set in "
-                               "configuration" % (self.name, self.path))
+                raise KeyError("%s (%s) with no default set in configuration"
+                               % (self.name, self.path))
             return self.default
 
     def set(self, configuration: Dict, value: Any):
@@ -436,10 +448,8 @@ class Configuration:
 
             if not opt.is_dynamically_updatable:
                 LOG.warning("Value of config option '%s' changed from "
-                            "'%s' to '%s', but this option does not support "
-                            "on-the-fly reloading.\n"
-                            "You MUST restart the server for the new "
-                            "configuration to apply!",
+                            "'%s' (in memory) to '%s' (in file), but this "
+                            "option does not support on-the-fly reloading.",
                             opt.name, str(old), str(new))
                 continue
 

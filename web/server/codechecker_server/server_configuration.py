@@ -28,7 +28,9 @@ def register_configuration_options(cfg: Configuration):
     """
     cfg.add_option("max_run_count", "/max_run_count",
                    default=None,
-                   # FIXME: check() that this is non-negative?
+                   check=lambda v: v is None or (type(v) is int and v >= 0),
+                   check_fail_msg="A size limit can not be negative.",
+                   settable=True,
                    updatable=True,
                    description="The maximum storable run count. If None, "
                                "an unlimited amount can be stored."
@@ -40,10 +42,96 @@ def register_configuration_options(cfg: Configuration):
                                           "can not be negative, using CPU "
                                           "count (%d) instead."
                                           % os.cpu_count(),
+                   settable=False,
+                   updatable=False,
                    # TODO: This should affect the count of the background
                    # workers as well!
                    description="The number of API request handler processes "
-                               "to start on the server.")
+                               "to start on the server."
+                   )
+
+    # Store options.
+    cfg.add_option("analysis_statistics_dir",
+                   "/store/analysis_statistics_dir",
+                   default=None,
+                   settable=True,
+                   updatable=True,
+                   description="The server-side directory where compressed "
+                               "analysis statistics files should be saved. "
+                               "If unset (None), analysis statistics are NOT "
+                               "stored on the server."
+                   )
+    cfg.add_option("failure_zip_size_limit",
+                   "/store/limit/failure_zip_size",
+                   default=None,
+                   check=lambda v: v is None or (type(v) is int and v >= 0),
+                   check_fail_msg="A size limit can not be negative.",
+                   settable=True,
+                   updatable=True,
+                   description="The maximum size of the collected failure "
+                               "ZIPs which can be stored on the server."
+                   )
+    cfg.add_option("compilation_database_size_limit",
+                   "/store/limit/compilation_database_size",
+                   default=None,
+                   check=lambda v: v is None or (type(v) is int and v >= 0),
+                   check_fail_msg="A size limit can not be negative.",
+                   settable=True,
+                   updatable=True,
+                   description="The limit for the compilation database "
+                               "file size."
+                   )
+
+    # Keepalive options.
+    cfg.add_option("enable_keepalive", "/keepalive/enabled",
+                   default=False,
+                   settable=False,
+                   updatable=False,
+                   description="Whether to set up TCP keep-alive on the "
+                               "server socket. This is recommended to be "
+                               "turned on in a distributed environment, "
+                               "such as Docker Swarm."
+                   )
+    cfg.add_option("keepalive_time_idle",
+                   "/keepalive/idle",
+                   default=None,
+                   check=lambda v: v is None or (type(v) is int and v >= 0),
+                   check_fail_msg="A time limit can not be negative.",
+                   settable=True,
+                   updatable=False,
+                   description="The interval (in seconds) after the sending "
+                               "of the last data packet (excluding ACKs) and "
+                               "the first keepalive probe. If unset (None), "
+                               "the default will be taken from the system "
+                               "configuration 'net.ipv4.tcp_keepalive_time'."
+                   )
+    cfg.add_option("keepalive_time_interval",
+                   "/keepalive/interval",
+                   default=None,
+                   check=lambda v: v is None or (type(v) is int and v >= 0),
+                   check_fail_msg="A time limit can not be negative.",
+                   settable=True,
+                   updatable=False,
+                   description="The interval (in seconds) between the "
+                               "sending of subsequent keepalive probes."
+                               "If unset (None), the default will be taken "
+                               "from the system configuration "
+                               "'net.ipv4.tcp_keepalive_intvl'."
+                   )
+    cfg.add_option("keepalive_max_probes",
+                   "/keepalive/max_probe",
+                   default=None,
+                   check=lambda v: v is None or (type(v) is int and v >= 0),
+                   check_fail_msg="A size limit can not be negative.",
+                   settable=True,
+                   updatable=False,
+                   description="The number of unacknowledged keepalive probes "
+                               "to send before the connection is considered "
+                               "dead by the kernel, and this is signalled "
+                               "to the server process. If unset (None), the "
+                               "default will be taken from the system "
+                               "configuration 'net.ipv4.tcp_keepalive_probes'."
+                   )
 
 
 def get_example_configuration_file_path() -> Path:
