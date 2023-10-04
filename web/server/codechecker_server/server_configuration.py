@@ -26,6 +26,13 @@ def register_configuration_options(cfg: Configuration):
     Registers the schema of Options that are accessible in a server
     configuration file.
     """
+    cfg.add_option("max_run_count", "/max_run_count",
+                   default=None,
+                   # FIXME: check() that this is non-negative?
+                   updatable=True,
+                   description="The maximum storable run count. If None, "
+                               "an unlimited amount can be stored."
+                   )
     cfg.add_option("worker_processes", "/worker_processes",
                    default=lambda: os.cpu_count(),
                    check=lambda v: v > 0,

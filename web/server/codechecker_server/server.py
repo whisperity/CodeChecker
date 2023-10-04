@@ -1078,9 +1078,13 @@ def start_server(config_directory, package_data, port: int, config_sql_server,
 
     def reload_signal_handler(*args, **kwargs):
         """
-        Reloads server configuration file.
+        Reloads the server configuration file.
         """
+        print("OLD", configuration.max_run_count, configuration.worker_processes)
+        X = configuration.reload()
+        print("RELOADED", X)
         session_manager.reload_config()
+        print("NEW", configuration.max_run_count, configuration.worker_processes)
 
     try:
         instance_manager.register(os.getpid(),
