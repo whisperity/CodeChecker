@@ -156,11 +156,11 @@ class Option:
         tree: Union[Dict, List] = configuration
         for key in self._path.parts[1:-1]:
             if type(tree) is dict:
-                tree = tree[key]
+                tree = cast(Dict, tree)[key]
             elif type(tree) is list:
                 try:
                     key_as_int = int(key)
-                    tree = tree[key_as_int]
+                    tree = cast(List, tree)[key_as_int]
                 except ValueError:
                     raise ValueError("Attempted to index a list "
                                      "with a non-integer!")
@@ -179,12 +179,12 @@ class Option:
         retrieved value is appropriate.
         """
         if type(parent) is dict:
-            return parent[name]
+            return cast(Dict, parent)[name]
         elif type(parent) is list:
             try:
                 idx = int(name)
                 try:
-                    return parent[idx]
+                    return cast(List, parent)[idx]
                 except IndexError:
                     raise KeyError(str(idx))
             except ValueError:
@@ -204,12 +204,12 @@ class Option:
         is appropriate or whether the value may be set by client code!
         """
         if type(parent) is dict:
-            parent[name] = value
+            cast(Dict, parent)[name] = value
         elif type(parent) is list:
             try:
                 idx = int(name)
                 try:
-                    parent[idx] = value
+                    cast(List, parent)[idx] = value
                 except IndexError:
                     raise KeyError(str(idx))
             except ValueError:

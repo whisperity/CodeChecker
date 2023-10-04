@@ -10,8 +10,6 @@ Handles the management of authentication sessions on the server's side.
 """
 
 import hashlib
-import json
-import os
 import re
 
 from datetime import datetime

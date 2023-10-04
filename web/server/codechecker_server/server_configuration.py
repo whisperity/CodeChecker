@@ -9,7 +9,7 @@
 Handles the retrieval and access to the file-based configuration of a server.
 """
 import os
-from pathlib import Path, PurePosixPath
+from pathlib import Path
 import shutil
 
 from codechecker_common.configuration_access import Configuration
