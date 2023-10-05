@@ -323,14 +323,13 @@ class Configuration:
             The file *MUST* be in JSON format, currently this is the only one
             supported.
         """
-        LOG.debug("%s reading '%s'...",
-                  type(self).__name__, configuration_file)
-
+        LOG.debug("Reading configuration file '%s'...", configuration_file)
         config_dict = load_json(str(configuration_file), None)
         if not config_dict:
             raise ValueError("Configuration file '%s' was invalid JSON. "
                              "The log output contains more information."
                              % str(configuration_file))
+        LOG.debug("Loaded configuration file '%s'.", configuration_file)
 
         # This code is frightening at first, but, unfortunately, the usual
         # 'self.member' syntax must be side-stepped so that __getattr__ and
