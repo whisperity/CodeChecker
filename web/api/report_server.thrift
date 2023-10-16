@@ -203,7 +203,7 @@ struct SubmittedRunOptions {
 }
 
 struct AsynchronousRunStoreHandle {
-  1: i64    pendingStoreToken,
+  1: i64    storeJobToken,
   2: string runName,
 }
 
@@ -998,9 +998,8 @@ service codeCheckerDBAccess {
       throws (1: codechecker_api_shared.RequestFailed requestError),
 
   // Retrieves the status of a pending massStoreRunAsynchronous() operation
-  // from the server. If the server-side processing of the data had concluded
-  // (both successfully or erroneously), the pending result is consumed and
-  // deleted from the database.
+  // from the server. Returns details about the server-side processing of the
+  // stored data, whether it had concluded (both successfully or erroneously).
   //
   // If the server enabled authentication, only the user who iniated the
   // processing may check its status.

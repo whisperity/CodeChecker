@@ -21,12 +21,11 @@ from codechecker_common.logger import get_logger
 
 from .database import DBSession
 from .run_db_model import AnalysisInfo, BugPathEvent, BugReportPoint, \
-    Comment, File, FileContent, PendingRunStore, Report, ReportAnalysisInfo, \
+    Comment, File, FileContent, Report, ReportAnalysisInfo, \
     RunHistoryAnalysisInfo, RunLock
 
 LOG = get_logger('server')
 RUN_LOCK_TIMEOUT_IN_DATABASE = timedelta(minutes=30)
-PENDING_STORE_TIMEOUT_IN_DATABASE = timedelta(days=1)
 SQLITE_LIMIT_COMPOUND_SELECT = 500
 
 
@@ -47,31 +46,6 @@ def remove_expired_run_locks(session_maker):
         except (sqlalchemy.exc.OperationalError,
                 sqlalchemy.exc.ProgrammingError) as ex:
             LOG.error("Failed to remove expired run locks: %s", str(ex))
-
-
-def remove_stale_pending_store_tokens(session_maker):
-    LOG.debug("Garbage collection of stale pending store tokens started...")
-
-    with DBSession(session_maker) as session:
-        try:
-            tokens_became_stale_at = datetime.now() - \
-                PENDING_STORE_TIMEOUT_IN_DATABASE
-
-            session.query(PendingRunStore) \
-                .filter(and_(PendingRunStore.status != "ongoing",
-                             PendingRunStore.finished_at is not None,
-                             PendingRunStore.finished_at <
-                             tokens_became_stale_at)) \
-                .delete(synchronize_session=False)
-
-            session.commit()
-
-            LOG.debug("Garbage collection of stale pending store tokens "
-                      "finished.")
-        except (sqlalchemy.exc.OperationalError,
-                sqlalchemy.exc.ProgrammingError) as ex:
-            LOG.error("Failed to remove stale pending store tokens: %s",
-                      str(ex))
 
 
 def remove_unused_files(session_maker):

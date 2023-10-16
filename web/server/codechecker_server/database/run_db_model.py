@@ -9,6 +9,7 @@
 SQLAlchemy ORM model for the analysis run storage database.
 """
 from datetime import datetime, timedelta
+from enum import Enum
 from math import ceil
 import os
 from typing import Optional
@@ -100,27 +101,34 @@ class RunLock(Base):
         return datetime.now() > self.when_expires(delta)
 
 
-class PendingRunStore(Base):
+class ActionHistory(Base):
     """
-    Stores information about the state of a pending 'store' operation.
+    Stores information about the state of important executed operations, such
+    as a submitted 'store' of a run.
     """
 
-    __tablename__ = "pending_stores"
+    class Kind(Enum):
+        store = 1
 
-    token = Column(Integer, primary_key=True)
+    __tablename__ = "action_history"
+
+    token = Column(String, primary_key=True)
+    kind = Column(Enum("store", name="kind"), nullable=False)
     status = Column(Enum("ongoing",
                          "successful",
                          "failed",
                          name="status"))
-    name = Column(String, nullable=False)
+    run_name = Column(String, nullable=False)
     username = Column(String, nullable=True)
     started_at = Column(DateTime, nullable=False)
     finished_at = Column(DateTime, nullable=True)
     comment = Column(String, nullable=True)
 
-    def __init__(self, run_name: str, username: Optional[str] = None):
+    def __init__(self, kind: Kind, run_name: str,
+                 username: Optional[str] = None):
+        self.kind = kind.name
         self.status = "ongoing"
-        self.name = run_name
+        self.run_name = run_name
         self.username = username
         self.started_at = datetime.now()
         self.finished_at = None
