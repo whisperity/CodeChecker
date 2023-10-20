@@ -198,7 +198,8 @@ struct RunHistoryData {
   4: string                  user,               // User name who analysed the run.
   5: string                  time,               // Date time when the run was analysed.
   6: i64                     id,                 // Id of the run history tag.
-  7: string                  checkCommand,       // Check command. !!!DEPRECATED!!! This field will be empty so use the getCheckCommand API function to get the check command for a run.
+  // !!!DEPRECATED!!! This field will be empty so use the getCheckCommand() API function to get the check command for a run.
+  7: string                  checkCommand,
   8: string                  codeCheckerVersion, // CodeChecker client version of the latest analysis.
   9: AnalyzerStatisticsData  analyzerStatistics, // Statistics for analyzers. Only number of failed and successfully analyzed
                                                  // files field will be set. To get full analyzer statistics please use the
@@ -468,7 +469,9 @@ union AnalysisInfoFilter {
 }
 
 struct AnalysisInfo {
-  1: string analyzerCommand,
+  1: string                             analyzerCommand,
+  // For each analyzer, the list of all checkers that executed in the analysis.
+  2: optional map<string, list<string>> enabledCheckers,
 }
 
 typedef string CommitHash
@@ -534,7 +537,7 @@ service codeCheckerDBAccess {
 
   // Get check command for a run.
   // PERMISSION: PRODUCT_VIEW
-  // !DEPRECATED Use getAnalysisInfo API to get the check commands.
+  // !DEPRECATED Use getAnalysisInfo() API to get the check commands.
   string getCheckCommand(1: i64 runHistoryId,
                          2: i64 runId)
                          throws (1: codechecker_api_shared.RequestFailed requestError),

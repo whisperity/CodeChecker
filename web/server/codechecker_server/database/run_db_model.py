@@ -11,12 +11,15 @@ SQLAlchemy ORM model for the analysis run storage database.
 from datetime import datetime, timedelta
 from math import ceil
 import os
+from typing import Dict, List
 
 from sqlalchemy import MetaData, Column, Integer, UniqueConstraint, String, \
     DateTime, Boolean, ForeignKey, Binary, Enum, Table, Text
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import relationship
 from sqlalchemy.sql.expression import true, false
+
+from .common import ZLibCompressedJSON, ZLibCompressedString
 
 CC_META = MetaData(naming_convention={
     "ix": 'ix_%(column_0_label)s',
@@ -34,10 +37,13 @@ class AnalysisInfo(Base):
     __tablename__ = 'analysis_info'
 
     id = Column(Integer, autoincrement=True, primary_key=True)
-    analyzer_command = Column(Binary)
+    analyzer_command = Column(ZLibCompressedString)
+    enabled_checkers = Column(ZLibCompressedJSON)
 
-    def __init__(self, analyzer_command):
+    def __init__(self, analyzer_command: str,
+                 enabled_checkers: Dict[str, List[str]]):
         self.analyzer_command = analyzer_command
+        self.enabled_checkers = enabled_checkers
 
 
 class Run(Base):
