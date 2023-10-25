@@ -73,7 +73,8 @@ def upgrade():
     # Add the new columns created in this revision.
     op.add_column("analysis_info",
                   sa.Column("enabled_checkers",
-                            ZLibCompressedJSON(),
+                            # ZLibCompressedJSON(),
+                            sa.String(),
                             nullable=True))
 
 

@@ -10,7 +10,7 @@ Util module.
 """
 import itertools
 import json
-import math
+from math import ceil
 import portalocker
 from typing import Callable
 
@@ -56,7 +56,7 @@ def progress(g, count: int, n: int,
             [list(chk)[0]
              for chk in chunks(
                  range(0, count + 1),
-                 int(math.ceil(count / n))
+                 int(ceil(count / n))
              )]))
         if checkpoints[-1] == 0:
             checkpoints.pop()

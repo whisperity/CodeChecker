@@ -38,10 +38,12 @@ class AnalysisInfo(Base):
 
     id = Column(Integer, autoincrement=True, primary_key=True)
     analyzer_command = Column(ZLibCompressedString)
-    enabled_checkers = Column(ZLibCompressedJSON)
+    # enabled_checkers = Column(ZLibCompressedJSON)
+    enabled_checkers = Column(String)
 
     def __init__(self, analyzer_command: str,
-                 enabled_checkers: Dict[str, List[str]]):
+                 enabled_checkers: str = ""):
+                 # enabled_checkers: Dict[str, List[str]]):
         self.analyzer_command = analyzer_command
         self.enabled_checkers = enabled_checkers
 
