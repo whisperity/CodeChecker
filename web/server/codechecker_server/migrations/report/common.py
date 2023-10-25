@@ -5,9 +5,17 @@
 #  SPDX-License-Identifier: Apache-2.0 WITH LLVM-exception
 #
 # -------------------------------------------------------------------------
+from typing import cast, Tuple
 import zlib
 
-from codechecker_server.database.common import encode_zlib
+from codechecker_server.database.common import decode_zlib, encode_zlib
+
+
+def raw_zlib_encode_buf(value: bytes) -> bytes:
+    """
+    Encodes the given 'value' binary buffer with ZLib's Z_BEST_COMPRESSION.
+    """
+    return zlib.compress(value, zlib.Z_BEST_COMPRESSION)
 
 
 def raw_zlib_decode_buf(value: bytes) -> bytes:
@@ -42,8 +50,25 @@ def recompress_zlib_as_tagged(value: bytes, kind: str = "str") -> bytes:
     return encode_zlib(raw, kind)
 
 
-def recompress_zlib_as_tagged_exact_ratio(value: bytes,
-                                          kind: str = "str") -> bytes:
+def recompress_zlib_as_untagged(value: bytes) -> bytes:
+    """
+    Recompresses the given tagged and ZLib-compressed 'value' as a raw
+    ZLib-compressed binary buffer without any additional tags.
+
+    This method always encodes using Z_BEST_COMPRESSION as the compression
+    strategy.
+    """
+    kind, payload = decode_zlib(value)
+    payload = cast(bytes,
+                   cast(str, payload).encode() if kind == "str" else payload)
+
+    return raw_zlib_encode_buf(payload)
+
+
+def recompress_zlib_as_tagged_exact_ratio(
+    value: bytes,
+    kind: str = "str"
+) -> Tuple[int, bytes]:
     """
     Recompresses the given raw ZLib-compressed 'value' by tagging it with the
     'kind' to be usable with the 'ZLibCompressed*' BLOB column adaptors.
@@ -60,4 +85,16 @@ def recompress_zlib_as_tagged_exact_ratio(value: bytes,
     different result than originally present. In this case, Z_BEST_COMPRESSION
     will be used for the re-compressed buffer.
     """
-    data = raw_zlib_decode(value)
+    data = raw_zlib_decode_buf(value)
+
+    def _attempt(level: int) -> bool:
+        return zlib.compress(data, level) == value
+
+    level_to_use = zlib.Z_BEST_COMPRESSION
+    for compression_level in reversed(range(-1, 10)):
+        if _attempt(compression_level):
+            # Found a matching compression ratio, use this one.
+            level_to_use = compression_level
+            break
+
+    return level_to_use, encode_zlib(data, kind, level_to_use)
