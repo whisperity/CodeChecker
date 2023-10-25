@@ -15,8 +15,6 @@ import zlib
 
 from sqlalchemy.types import LargeBinary, TypeDecorator
 
-cmd = zlib.compress("X".encode("utf-8"), zlib.Z_BEST_COMPRESSION)
-
 
 def to_zlib_tag_prefix(kind: str, compression_level: int) -> bytes:
     if '@' in kind:

@@ -5,7 +5,7 @@
 #  SPDX-License-Identifier: Apache-2.0 WITH LLVM-exception
 #
 # -------------------------------------------------------------------------
-from typing import cast, Tuple
+from typing import Tuple, cast
 import zlib
 
 from codechecker_server.database.common import decode_zlib, encode_zlib
