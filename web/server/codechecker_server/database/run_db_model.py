@@ -19,7 +19,7 @@ from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import relationship
 from sqlalchemy.sql.expression import true, false
 
-from .common import ZLibCompressedJSON, ZLibCompressedString
+from .common import ZLibCompressedString
 
 CC_META = MetaData(naming_convention={
     "ix": 'ix_%(column_0_label)s',
@@ -39,6 +39,13 @@ class AnalysisInfo(Base):
     id = Column(Integer, autoincrement=True, primary_key=True)
     analyzer_command = Column(ZLibCompressedString)
     # enabled_checkers = Column(ZLibCompressedJSON)
+    # TODO: Instead of enabled_checkers storing a massive string with irrelevant
+    # meta characters to keep format, create a proper relation out of this with
+    # a connecting table that associates with each AnalysisInfo a set of checkers,
+    # each annotated with Bool (whether it was enabled).
+    #
+    # TODO: Create a new table that stores every analyser and checker name combination
+    # ever observed.
     enabled_checkers = Column(String)
 
     def __init__(self, analyzer_command: str,

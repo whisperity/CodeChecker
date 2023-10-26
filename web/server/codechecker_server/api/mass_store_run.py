@@ -19,7 +19,7 @@ from collections import defaultdict
 from datetime import datetime
 from hashlib import sha256
 from tempfile import TemporaryDirectory
-from typing import Any, Dict, List, Optional, Set, Tuple
+from typing import Any, Dict, List, Optional, Set, Tuple, cast
 
 import codechecker_api_shared
 from codechecker_api.codeCheckerDBAccess_v6 import ttypes
@@ -662,8 +662,32 @@ class MassStoreRun:
                     # database. In this case we will select the first one.
                     analysis_info = analysis_info_rows[0]
                 else:
+                    all_checkers_grouped_by_analyzer = mip.checkers
+                    start = time.time()
+                    # enabled_checkers = {
+                    #     analyzer: [chk_name
+                    #                for chk_name in checkers_to_bools
+                    #                if cast(Dict[str, bool],
+                    #                        checkers_to_bools)[chk_name]
+                    #                ] for analyzer, checkers_to_bools
+                    #     in mip.checkers.items()}
+                    # data = json.dumps(enabled_checkers)
+                    data = json.dumps(mip.checkers)
+                    end = time.time()
+                    print("Data transformation", (end - start))
+                    print("Raw", len(data))
+
+                    start = time.time()
+                    buffer = zlib.compress(data.encode(),
+                                           zlib.Z_BEST_COMPRESSION)
+                    end = time.time()
+
+                    print("Compression", (end - start))
+                    print("Compressed size", len(buffer))
+
                     analysis_info = AnalysisInfo(
-                        analyzer_command=analyzer_command)
+                        analyzer_command=analyzer_command,
+                        enabled_checkers="")
                     session.add(analysis_info)
 
                 run_history.analysis_info.append(analysis_info)

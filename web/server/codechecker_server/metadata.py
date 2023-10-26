@@ -9,7 +9,7 @@
 Helpers to parse metadata.json file.
 """
 
-from typing import Any, Dict, List, Optional, Set, Union
+from typing import Any, Dict, List, Optional, Set, Union, cast
 import os
 
 from codechecker_common.logger import get_logger
@@ -61,9 +61,10 @@ class MetadataInfoParser:
         self.disabled_checkers: DisabledCheckers = set()
         self.checker_to_analyzer: CheckerToAnalyzer = dict()
 
-        self.__metadata_dict = {}
+        self.__metadata_dict: Dict[str, Any] = {}
         if os.path.isfile(metadata_file_path):
-            self.__metadata_dict = load_json(metadata_file_path, {})
+            self.__metadata_dict = cast(Dict[str, Any],
+                                        load_json(metadata_file_path, {}))
 
             if 'version' in self.__metadata_dict:
                 self.__process_metadata_info_v2()
