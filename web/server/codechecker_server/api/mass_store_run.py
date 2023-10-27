@@ -37,10 +37,11 @@ from codechecker_report_converter.source_code_comment_handler import \
 from ..database import db_cleanup
 from ..database.config_db_model import Product
 from ..database.database import DBSession
-from ..database.run_db_model import AnalysisInfo, AnalyzerStatistic, \
-    BugPathEvent, BugReportPoint, ReportAnnotations, ExtendedReportData, \
-    File, FileContent, Report as DBReport, ReviewStatus as ReviewStatusRule, \
-    Run, RunHistory, RunLock
+from ..database.run_db_model import AnalysisInfo, AnalysisInfoChecker, \
+    AnalyzerStatistic, BugPathEvent, BugReportPoint, CheckerName, \
+    ExtendedReportData, File, FileContent, Report as DBReport, \
+    ReportAnnotations, ReviewStatus as ReviewStatusRule, Run, RunHistory, \
+    RunLock
 from ..metadata import checker_is_unavailable, MetadataInfoParser
 
 from .report_server import ThriftRequestHandler
@@ -662,33 +663,46 @@ class MassStoreRun:
                     # database. In this case we will select the first one.
                     analysis_info = analysis_info_rows[0]
                 else:
-                    all_checkers_grouped_by_analyzer = mip.checkers
-                    start = time.time()
-                    # enabled_checkers = {
-                    #     analyzer: [chk_name
-                    #                for chk_name in checkers_to_bools
-                    #                if cast(Dict[str, bool],
-                    #                        checkers_to_bools)[chk_name]
-                    #                ] for analyzer, checkers_to_bools
-                    #     in mip.checkers.items()}
-                    # data = json.dumps(enabled_checkers)
-                    data = json.dumps(mip.checkers)
-                    end = time.time()
-                    print("Data transformation", (end - start))
-                    print("Raw", len(data))
-
-                    start = time.time()
-                    buffer = zlib.compress(data.encode(),
-                                           zlib.Z_BEST_COMPRESSION)
-                    end = time.time()
-
-                    print("Compression", (end - start))
-                    print("Compressed size", len(buffer))
-
                     analysis_info = AnalysisInfo(
-                        analyzer_command=analyzer_command,
-                        enabled_checkers="")
+                        analyzer_command=analyzer_command)
+
+                    # Obtain the ID eagerly to use the many-to-many join table.
                     session.add(analysis_info)
+                    session.flush()
+                    session.refresh(analysis_info, ["id"])
+
+                    for analyzer, checker_data \
+                            in cast(Dict[str, Dict[str, bool]],
+                                    mip.checkers).items():
+                        known_checkers_objs = session \
+                            .query(CheckerName) \
+                            .filter(CheckerName.analyzer_name == analyzer) \
+                            .all()
+
+                        # The checkers for this analyser that had already been
+                        # added to the database before.
+                        known_checkers_lookup = \
+                            {chk.checker_name: {"known": True,
+                                                "obj": chk
+                                                }
+                             for chk in known_checkers_objs}
+
+                        # Checkers that we are seeing for the first time, with
+                        # temporary (not yet persisted) database rows.
+                        known_checkers_lookup.update(
+                            {name: {"known": False,
+                                    "obj": CheckerName(analyzer, name)
+                                    }
+                             for name in checker_data.keys()})
+
+                        # Persist, and eagerly reload so that the ID is
+                        # obtained...
+                        # TODO: The adding of these rows and the obtain of their
+                        # IDs might fail due to conflicts with a parallel
+                        # transcation, so the pipeline needs to be reviewed and
+                        # understood before deciding on a workflow here!
+                        for chk, enabled in checker_data.items():
+                             pass
 
                 run_history.analysis_info.append(analysis_info)
                 self.__analysis_info[src_dir_path] = analysis_info

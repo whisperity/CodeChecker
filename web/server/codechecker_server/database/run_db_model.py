@@ -33,26 +33,62 @@ CC_META = MetaData(naming_convention={
 Base = declarative_base(metadata=CC_META)
 
 
+class CheckerName(Base):
+    """
+    Records of a look-up table that associates a product-global ID for each
+    analyzer name and checker name encountered.
+    """
+    __tablename__ = "checker_names"
+
+    id = Column(Integer, autoincrement=True, primary_key=True)
+    analyzer_name = Column(String)
+    checker_name = Column(String)
+
+    __table_args__ = (
+        UniqueConstraint("analyzer_name", "checker_name"),
+    )
+
+    def __init__(self, analyzer_name: str, checker_name: str):
+        self.analyzer_name = analyzer_name
+        self.checker_name = checker_name
+
+
+class AnalysisInfoChecker(Base):
+    __tablename__ = "analysis_info_checkers"
+
+    analysis_info_id = Column(Integer,
+                              ForeignKey("analysis_info.id",
+                                         deferrable=True,
+                                         initially="DEFERRED",
+                                         ondelete="CASCADE"),
+                              primary_key=True)
+    checker_name_id = Column(Integer,
+                             ForeignKey("checker_names.id",
+                                        deferrable=True,
+                                        initially="DEFERRED",
+                                        ondelete="CASCADE"),
+                             primary_key=True)
+    enabled = Column(Boolean)
+
+    def __init__(self,
+                 analysis_info: "AnalysisInfo",
+                 checker_name: CheckerName,
+                 is_enabled: bool):
+        print(analysis_info.__dict__, checker_name.__dict__, "Enabled:", is_enabled)
+        self.analysis_info_id = analysis_info.id
+        self.checker_name_id = checker_name.id
+        self.enabled = is_enabled
+
+
 class AnalysisInfo(Base):
-    __tablename__ = 'analysis_info'
+    __tablename__ = "analysis_info"
 
     id = Column(Integer, autoincrement=True, primary_key=True)
     analyzer_command = Column(ZLibCompressedString)
-    # enabled_checkers = Column(ZLibCompressedJSON)
-    # TODO: Instead of enabled_checkers storing a massive string with irrelevant
-    # meta characters to keep format, create a proper relation out of this with
-    # a connecting table that associates with each AnalysisInfo a set of checkers,
-    # each annotated with Bool (whether it was enabled).
-    #
-    # TODO: Create a new table that stores every analyser and checker name combination
-    # ever observed.
-    enabled_checkers = Column(String)
+    available_checkers = relationship(AnalysisInfoChecker, uselist=True)
 
-    def __init__(self, analyzer_command: str,
-                 enabled_checkers: str = ""):
-                 # enabled_checkers: Dict[str, List[str]]):
+    def __init__(self, analyzer_command: str):
         self.analyzer_command = analyzer_command
-        self.enabled_checkers = enabled_checkers
 
 
 class Run(Base):

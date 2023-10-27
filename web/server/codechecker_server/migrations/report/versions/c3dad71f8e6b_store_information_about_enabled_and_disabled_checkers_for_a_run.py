@@ -1,4 +1,4 @@
-"""Add 'enabled_checkers' to 'analysis_info'
+"""Store information about enabled and disabled checkers for a run
 
 Revision ID: c3dad71f8e6b
 Revises: 9d956a0fae8d
@@ -19,7 +19,6 @@ from sqlalchemy.orm import Session
 from sqlalchemy.ext.automap import automap_base
 
 from codechecker_common.util import progress
-from codechecker_server.database.common import ZLibCompressedJSON
 from codechecker_server.migrations.report.common import \
     recompress_zlib_as_untagged, recompress_zlib_as_tagged_exact_ratio
 
@@ -31,9 +30,7 @@ def AnalysisInfo_in_DB(conn):
     """
     Base = automap_base()
     Base.prepare(conn, reflect=True)
-
-    AnalysisInfo = Base.classes.analysis_info  # "analysis_info" table name.
-
+    AnalysisInfo = Base.classes.analysis_info  # "analysis_info" is table name.
     return Session(bind=conn), AnalysisInfo
 
 
@@ -70,25 +67,42 @@ def upgrade():
         LOG.info("Done upgrading 'analysis_info'.")
         db.commit()
 
-    # Add the new columns created in this revision.
-    op.add_column("analysis_info",
-                  sa.Column("enabled_checkers",
-                            # ZLibCompressedJSON(),
-                            sa.String(),
-                            nullable=True))
+    # Add the new tables and columns created in this revision.
+    op.create_table(
+        "checker_names",
+        sa.Column("id", sa.Integer(), autoincrement=True, nullable=False),
+        sa.Column("analyzer_name", sa.String(), nullable=True),
+        sa.Column("checker_name", sa.String(), nullable=True),
+        sa.PrimaryKeyConstraint("id", name=op.f("pk_checker_names")),
+        sa.UniqueConstraint("analyzer_name", "checker_name",
+                            name=op.f("uq_checker_names_analyzer_name"))
+    )
+
+    op.create_table(
+        "analysis_info_checkers",
+        sa.Column("analysis_info_id", sa.Integer(), nullable=False),
+        sa.Column("checker_name_id", sa.Integer(), nullable=False),
+        sa.Column("enabled", sa.Boolean(), nullable=True),
+        sa.ForeignKeyConstraint(
+            ["analysis_info_id"], ["analysis_info.id"],
+            name=op.f("fk_analysis_info_checkers_analysis_info_id_analysis_info"),
+            ondelete="CASCADE", initially="DEFERRED",
+            deferrable=True),
+        sa.ForeignKeyConstraint(
+            ["checker_name_id"], ["checker_names.id"],
+            name=op.f("fk_analysis_info_checkers_checker_name_id_checker_names"),
+            ondelete="CASCADE", initially="DEFERRED", deferrable=True),
+        sa.PrimaryKeyConstraint("analysis_info_id", "checker_name_id",
+                                name=op.f("pk_analysis_info_checkers"))
+    )
 
 
 def downgrade():
     LOG = getLogger("migration")
 
-    # Drop all columns that were created in this revision.
-    if op.get_context().dialect.name == "sqlite":
-        op.execute("PRAGMA foreign_keys=off")
-        with op.batch_alter_table("analysis_info") as batch:
-            batch.drop_column("enabled_checkers")
-        op.execute("PRAGMA foreign_keys=on")
-    else:
-        op.drop_column("analysis_info", "enabled_checkers")
+    # Drop all tables and columns that were created in this revision.
+    op.drop_table("analysis_info_checkers")
+    op.drop_table("checker_names")
 
     # Revert the changes of the columns that remain.
     conn = op.get_bind()
