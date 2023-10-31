@@ -74,7 +74,6 @@ class AnalysisInfoChecker(Base):
                  analysis_info: "AnalysisInfo",
                  checker_name: CheckerName,
                  is_enabled: bool):
-        print(analysis_info.__dict__, checker_name.__dict__, "Enabled:", is_enabled)
         self.analysis_info_id = analysis_info.id
         self.checker_name_id = checker_name.id
         self.enabled = is_enabled

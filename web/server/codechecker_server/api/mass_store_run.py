@@ -16,7 +16,7 @@ import zipfile
 import zlib
 
 from collections import defaultdict
-from datetime import datetime
+from datetime import datetime, timedelta
 from hashlib import sha256
 from tempfile import TemporaryDirectory
 from typing import Any, Dict, List, Optional, Set, Tuple, cast
@@ -62,7 +62,7 @@ class LogTask:
         LOG.info("[%s] %s...", self.__run_name, self.__msg)
 
     def __exit__(self, *args):
-        LOG.info("[%s] %s done... (duration: %s sec)", self.__run_name,
+        LOG.info("[%s] %s. Done. (Duration: %s sec)", self.__run_name,
                  self.__msg, round(time.time() - self.__start_time, 2))
 
 
@@ -578,6 +578,64 @@ class MassStoreRun:
                 # the meantime.
                 session.rollback()
 
+    def __store_checker_identifiers(self):
+        """
+        Stores the identifiers "(analyzer, checker_name)" in the database into
+        a look-up table where each unique checker is given a unique numeric
+        identifier.
+
+        Due to the use of an M-to-N connection table
+        (see `AnalysisInfoChecker`) one side of the joins must have their IDs
+        eagerly populated, otherwise the Python bindings will fail.
+        However, eager population will result in exceptions that a flush was
+        created before the transaction was complete.
+
+        Moreover, this is performed separately from the storing of the details
+        of a run to reduce contention if two parallel stores, especially across
+        server instances (in a distributed/load-balanced environment) want to
+        store the same identifier(s).
+        """
+        max_tries, tries, wait_time = 3, 0, timedelta(seconds=30)
+        all_checkers = {(analyzer, checker)
+                        for metadata in self.__mips.values()
+                        for analyzer in metadata.checkers.keys()
+                        for checker
+                        in cast(Dict[str, Dict[str, bool]],
+                                metadata.checkers)[analyzer].keys()}
+        while tries < max_tries:
+            tries += 1
+            try:
+                LOG.debug("[%s] Begin attempt %d...", self.__name, tries)
+                with DBSession(self.__Session) as session:
+                    known_checkers = session.query(CheckerName) \
+                        .all()
+                    known_checkers = {(r.analyzer_name, r.checker_name)
+                                      for r in known_checkers}
+                    unknown_checkers = all_checkers - known_checkers
+                    for r in unknown_checkers:
+                        session.add(CheckerName(*r))
+
+                    session.commit()
+                    return
+            except (sqlalchemy.exc.OperationalError,
+                    sqlalchemy.exc.ProgrammingError) as ex:
+                LOG.error("Storing checker names of run '%s' failed: %s.\n"
+                          "Waiting %d before trying again...",
+                          self.__name, ex, wait_time)
+                time.sleep(wait_time.total_seconds())
+                wait_time *= 2
+            except Exception as ex:
+                LOG.error("Failed to store checker names due to other error: "
+                          "%s", ex)
+                import traceback
+                traceback.print_exc()
+                raise
+
+        raise codechecker_api_shared.ttypes.RequestFailed(
+            codechecker_api_shared.ttypes.ErrorCode.DATABASE,
+            "Storing the names of the checkers in the run failed due to "
+            "excessive contention!")
+
     def __store_analysis_statistics(
         self,
         session: DBSession,
@@ -653,8 +711,8 @@ class MassStoreRun:
             for analyzer_command in mip.check_commands:
                 analysis_info_rows = session \
                     .query(AnalysisInfo) \
-                    .filter(AnalysisInfo.analyzer_command == analyzer_command) \
-                    .all()
+                    .filter(AnalysisInfo.analyzer_command ==
+                            analyzer_command).all()
 
                 if analysis_info_rows:
                     # It is possible when multiple runs are stored
@@ -666,7 +724,7 @@ class MassStoreRun:
                     analysis_info = AnalysisInfo(
                         analyzer_command=analyzer_command)
 
-                    # Obtain the ID eagerly to use the many-to-many join table.
+                    # Obtain the ID eagerly to be able to use the M-to-N table.
                     session.add(analysis_info)
                     session.flush()
                     session.refresh(analysis_info, ["id"])
@@ -674,35 +732,17 @@ class MassStoreRun:
                     for analyzer, checker_data \
                             in cast(Dict[str, Dict[str, bool]],
                                     mip.checkers).items():
-                        known_checkers_objs = session \
+                        db_checkers = session \
                             .query(CheckerName) \
                             .filter(CheckerName.analyzer_name == analyzer) \
                             .all()
+                        db_checkers = {r.checker_name: r for r in db_checkers}
 
-                        # The checkers for this analyser that had already been
-                        # added to the database before.
-                        known_checkers_lookup = \
-                            {chk.checker_name: {"known": True,
-                                                "obj": chk
-                                                }
-                             for chk in known_checkers_objs}
-
-                        # Checkers that we are seeing for the first time, with
-                        # temporary (not yet persisted) database rows.
-                        known_checkers_lookup.update(
-                            {name: {"known": False,
-                                    "obj": CheckerName(analyzer, name)
-                                    }
-                             for name in checker_data.keys()})
-
-                        # Persist, and eagerly reload so that the ID is
-                        # obtained...
-                        # TODO: The adding of these rows and the obtain of their
-                        # IDs might fail due to conflicts with a parallel
-                        # transcation, so the pipeline needs to be reviewed and
-                        # understood before deciding on a workflow here!
-                        for chk, enabled in checker_data.items():
-                             pass
+                        connection_rows = [AnalysisInfoChecker(
+                            analysis_info, db_checkers[name], is_enabled)
+                            for name, is_enabled in checker_data.items()]
+                        for r in connection_rows:
+                            session.add(r)
 
                 run_history.analysis_info.append(analysis_info)
                 self.__analysis_info[src_dir_path] = analysis_info
@@ -1351,12 +1391,18 @@ class MassStoreRun:
                 run_history_time = datetime.now()
 
                 # Parse all metadata information from the report directory.
-                for root_dir_path, _, _ in os.walk(report_dir):
-                    metadata_file_path = os.path.join(
-                        root_dir_path, 'metadata.json')
+                with LogTask(run_name=self.__name,
+                             message="Parse 'metadata.json's"):
+                    for root_dir_path, _, _ in os.walk(report_dir):
+                        metadata_file_path = os.path.join(
+                            root_dir_path, 'metadata.json')
 
-                    self.__mips[root_dir_path] = \
-                        MetadataInfoParser(metadata_file_path)
+                        self.__mips[root_dir_path] = \
+                            MetadataInfoParser(metadata_file_path)
+
+                with LogTask(run_name=self.__name,
+                             message="Get ID for all checkers' names"):
+                    self.__store_checker_identifiers()
 
                 # When we use multiple server instances and we try to run
                 # multiple storage to each server which contain at least two
