@@ -666,6 +666,7 @@ class Product:
         """
         Cleanup the run database which belongs to this product.
         """
+        return True  # HACK: Remove this.
         LOG.info("Garbage collection for product '%s' started...",
                  self.endpoint)
 

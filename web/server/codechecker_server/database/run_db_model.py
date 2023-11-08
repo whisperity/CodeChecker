@@ -402,14 +402,19 @@ class Report(Base):
                                ondelete='CASCADE'),
                     index=True)
     bug_id = Column(String, index=True)
-    checker_id = Column(String)
+    checker_id_x = Column(Integer, ForeignKey("checker_names.id",
+                                              deferrable=False),
+                     index=True)
+    checker_id = Column(String)  # FIXME: DEPRECATED.
+    # QUESTION: What is this? Why is this useful? Why is this stored here in
+    # addition to the analyser-name and checker-name.
     checker_cat = Column(String)
     bug_type = Column(String)
     severity = Column(Integer)
     line = Column(Integer)
     column = Column(Integer)
     path_length = Column(Integer)
-    analyzer_name = Column(String,
+    analyzer_name = Column(String,  # FIXME: DEPRECATED.
                            nullable=False,
                            server_default="unknown")
 

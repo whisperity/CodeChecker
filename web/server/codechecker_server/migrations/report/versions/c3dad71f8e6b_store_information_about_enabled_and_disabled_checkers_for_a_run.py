@@ -12,8 +12,11 @@ down_revision = '9d956a0fae8d'
 branch_labels = None
 depends_on = None
 
-from alembic import op
+
 from logging import getLogger
+from typing import Dict, List, Set, Tuple
+
+from alembic import op
 import sqlalchemy as sa
 from sqlalchemy.orm import Session
 from sqlalchemy.ext.automap import automap_base
@@ -23,17 +26,6 @@ from codechecker_server.migrations.report.common import \
     recompress_zlib_as_untagged, recompress_zlib_as_tagged_exact_ratio
 
 
-def AnalysisInfo_in_DB(conn):
-    """
-    Obtain a database conncetion and the in-migration AnalysisInfo object's
-    definition.
-    """
-    Base = automap_base()
-    Base.prepare(conn, reflect=True)
-    AnalysisInfo = Base.classes.analysis_info  # "analysis_info" is table name.
-    return Session(bind=conn), AnalysisInfo
-
-
 def upgrade():
     # Note: The instantiation of the LOG variable *MUST* stay here so that it
     # uses the facilities that are sourced from the Alembic env.py.
@@ -41,17 +33,23 @@ def upgrade():
     # had loaded.
     LOG = getLogger("migration")
 
+    dialect = op.get_context().dialect.name
+
     # Upgrade the contents of the existing columns to the new ZLibCompressed
     # format.
     #
     # Note: The underlying type of ZLibCompressedString is still LargeBinary,
     # so the Column itself need not be modified, only the contents.
     conn = op.get_bind()
-    db, AnalysisInfo = AnalysisInfo_in_DB(conn)
+    db = Session(bind=conn)
+    Base = automap_base()
+    Base.prepare(conn, reflect=True)
+    AnalysisInfo = Base.classes.analysis_info  # 'analysis_info' is the table!
+
     count = db.query(AnalysisInfo).count()
     if count:
         def _print_progress(index: int, percent: float):
-            LOG.info("[%d/%d] Migrating 'analysis_info'... %.0f%% done.",
+            LOG.info("[%d/%d] Upgrading 'analysis_info'... %.0f%% done.",
                      index, count, percent)
 
         LOG.info("Preparing to upgrade %d 'analysis_info'...", count)
@@ -64,8 +62,8 @@ def upgrade():
                 .filter(AnalysisInfo.id == analysis_info.id) \
                 .update({"analyzer_command": new_analyzer_command},
                         synchronize_session=False)
-        LOG.info("Done upgrading 'analysis_info'.")
         db.commit()
+        LOG.info("Done upgrading 'analysis_info'.")
 
     # Add the new tables and columns created in this revision.
     op.create_table(
@@ -96,6 +94,81 @@ def upgrade():
                                 name=op.f("pk_analysis_info_checkers"))
     )
 
+    # Pre-allocate IDs in the look-up table for all checkers that were
+    # encountered according to the currently present reports in the DB.
+    Base = automap_base()
+    Base.prepare(conn, reflect=True)
+    Report = Base.classes.reports  # 'reports' is the table name!
+    CheckerName = Base.classes.checker_names  # 'checker_names' is the table!
+    count = db.query(Report).count()
+    if count:
+        checkers_to_reports: Dict[Tuple[str, str], List[int]] = dict()
+
+        def _print_progress(index: int, percent: float):
+            LOG.info("[%d/%d] Gathering checkers from 'reports'... "
+                     "%.0f%% done. %d checkers found.",
+                     index, count, percent, len(checkers_to_reports))
+
+        LOG.info("Preparing to pre-fill 'checker_names'...")
+        LOG.info("Preparing to gather checkers from %d 'reports'...",
+                 count)
+        for report in progress(db.query(Report).all(), count,
+                               100 // 5,
+                               callback=_print_progress):
+            chk = (report.analyzer_name, report.checker_id)
+            reps = checkers_to_reports.get(chk, list())
+            reps.append(report.id)
+            checkers_to_reports[chk] = reps
+
+        checkers_to_objs: Dict[Tuple[str, str], int] = dict()
+        for chk in sorted(checkers_to_reports.keys()):
+            obj = CheckerName(analyzer_name=chk[0], checker_name=chk[1])
+            db.add(obj)
+            db.flush()
+            db.refresh(obj, ["id"])
+
+            checkers_to_objs[chk] = obj.id
+        db.commit()
+        LOG.info("Done pre-filling 'checker_names'.")
+
+    # Upgrade the 'reports' table to use the 'checker_names' foreign look-up
+    # instead of containing the strings allocated locally with the record.
+    col_reports_checker_name_id = sa.Column("checker_id", sa.Integer(),
+                                            nullable=True)
+    ix_reports_checker_id = {
+        "index_name": op.f("ix_reports_checker_id"),
+        "columns": ["checker_id"],
+        "unique": False
+    }
+    fk_reports_checker_id = {
+        "constraint_name": op.f("fk_reports_checker_id_checker_names"),
+        "referent_table": "checker_names",
+        "local_cols": ["checker_id"],
+        "remote_cols": ["id"]
+    }
+
+    if dialect == "sqlite":
+        op.execute("PRAGMA foreign_keys=OFF;")
+
+    with op.batch_alter_table("reports") as ba:
+        ba.alter_column("checker_id", new_column_name="checker_id_old")
+
+    with op.batch_alter_table("reports",
+                              recreate="always" if dialect == "sqlite"
+                                       else "auto") as ba:
+        ba.add_column(col_reports_checker_name_id, insert_after="bug_id")
+        ba.create_index(**ix_reports_checker_id)
+        ba.create_foreign_key(**fk_reports_checker_id)
+
+    # TODO: Fill all the reports with the information about their checker_ids.
+
+    # with op.batch_alter_table("reports") as ba:
+        # ba.drop_column("checker_id_old")
+        # ba.alter_column("checker_id", nullable=False)
+
+    if dialect == "sqlite":
+        op.execute("PRAGMA foreign_keys=ON;")
+
 
 def downgrade():
     LOG = getLogger("migration")
@@ -106,7 +179,11 @@ def downgrade():
 
     # Revert the changes of the columns that remain.
     conn = op.get_bind()
-    db, AnalysisInfo = AnalysisInfo_in_DB(conn)
+    db = Session(bind=conn)
+    Base = automap_base()
+    Base.prepare(conn, reflect=True)
+    AnalysisInfo = Base.classes.analysis_info  # 'analysis_info' is the table!
+
     count = db.query(AnalysisInfo).count()
     if count:
         def _print_progress(index: int, percent: float):

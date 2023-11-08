@@ -47,8 +47,8 @@ def progress(g, count: int, n: int,
              callback: Callable[[int, float], None]):
     """
     Wraps a generator of a known total length and fires 'callback' after having
-    yielded every T/Nth element. The 'callback' is given the index and the
-    percentage.
+    yielded every (T/N)th element. The 'callback' is given the index of the
+    element handled just before firing it, and the percentage of progress.
     """
     # E.g., if count == 100 and n == 5, then becomes [100, 95, ..., 10, 5, 0].
     try:
