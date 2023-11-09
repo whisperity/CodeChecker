@@ -402,21 +402,19 @@ class Report(Base):
                                ondelete='CASCADE'),
                     index=True)
     bug_id = Column(String, index=True)
-    checker_id_x = Column(Integer, ForeignKey("checker_names.id",
-                                              deferrable=False),
-                     index=True)
-    checker_id = Column(String)  # FIXME: DEPRECATED.
+    checker_id = Column(Integer, ForeignKey("checker_names.id",
+                                            deferrable=False),
+                        index=True)
+
     # QUESTION: What is this? Why is this useful? Why is this stored here in
     # addition to the analyser-name and checker-name.
     checker_cat = Column(String)
+
     bug_type = Column(String)
     severity = Column(Integer)
     line = Column(Integer)
     column = Column(Integer)
     path_length = Column(Integer)
-    analyzer_name = Column(String,  # FIXME: DEPRECATED.
-                           nullable=False,
-                           server_default="unknown")
 
     # TODO: multiple messages to multiple source locations?
     checker_message = Column(String)
@@ -459,18 +457,18 @@ class Report(Base):
     annotations = relationship("ReportAnnotations")
 
     # Priority/severity etc...
-    def __init__(self, run_id, bug_id, file_id, checker_message, checker_id,
-                 checker_cat, bug_type, line, column, severity, review_status,
-                 review_status_author, review_status_message,
-                 review_status_date, review_status_is_in_source,
-                 detection_status, detection_date, path_length,
-                 analyzer_name=None):
+    def __init__(self, run_id, bug_id, file_id, checker_message,
+                 checker: CheckerName, checker_cat, bug_type, line, column,
+                 severity, review_status, review_status_author,
+                 review_status_message, review_status_date,
+                 review_status_is_in_source, detection_status, detection_date,
+                 path_length):
         self.run_id = run_id
         self.file_id = file_id
         self.bug_id = bug_id
         self.checker_message = checker_message
         self.severity = severity
-        self.checker_id = checker_id
+        self.checker_id = checker.id
         self.checker_cat = checker_cat
         self.bug_type = bug_type
         self.review_status = review_status
@@ -483,7 +481,6 @@ class Report(Base):
         self.column = column
         self.detected_at = detection_date
         self.path_length = path_length
-        self.analyzer_name = analyzer_name
 
 
 class ReportAnnotations(Base):
