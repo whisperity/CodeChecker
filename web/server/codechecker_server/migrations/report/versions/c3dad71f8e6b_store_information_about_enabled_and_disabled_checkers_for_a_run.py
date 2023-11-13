@@ -88,7 +88,7 @@ def upgrade():
         sa.ForeignKeyConstraint(
             ["checker_name_id"], ["checker_names.id"],
             name=op.f("fk_analysis_info_checkers_checker_name_id_checker_names"),
-            ondelete="CASCADE", initially="DEFERRED", deferrable=True),
+            ondelete="RESTRICT", initially="DEFERRED", deferrable=True),
         sa.PrimaryKeyConstraint("analysis_info_id", "checker_name_id",
                                 name=op.f("pk_analysis_info_checkers"))
     )
@@ -109,6 +109,10 @@ def upgrade():
                      index, count, percent, len(checkers_to_reports))
 
         LOG.info("Preparing to pre-fill 'checker_names'...")
+
+        db.add(CheckerName(analyzer_name="UNKNOWN", checker_name="NOT FOUND"))
+        db.commit()
+
         LOG.info("Preparing to gather checkers from %d 'reports'...",
                  count)
         for report in progress(db.query(Report).all(), count,
@@ -141,7 +145,9 @@ def upgrade():
         "constraint_name": op.f("fk_reports_checker_id_checker_names"),
         "referent_table": "checker_names",
         "local_cols": ["checker_id"],
-        "remote_cols": ["id"]
+        "remote_cols": ["id"],
+        "deferrable": False,
+        "ondelete": "RESTRICT"
     }
 
     LOG.info("Upgrading 'reports' table structure...")
@@ -160,8 +166,6 @@ def upgrade():
         ba.drop_column("analyzer_name")
 
         ba.add_column(col_reports_checker_name_id, insert_after="bug_id")
-        ba.create_index(**ix_reports_checker_id)
-        ba.create_foreign_key(**fk_reports_checker_id)
 
     if count:
         LOG.info("Preparing to upgrade %d 'reports'...", count)
@@ -185,6 +189,9 @@ def upgrade():
     with op.batch_alter_table("reports") as ba:
         # Now that the values are filled, ensure that the constriants are
         # appropriately enforced.
+        ba.create_index(**ix_reports_checker_id)
+        ba.create_foreign_key(**fk_reports_checker_id)
+
         ba.alter_column("checker_id", nullable=False)
 
     if dialect == "sqlite":

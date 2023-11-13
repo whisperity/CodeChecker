@@ -596,12 +596,13 @@ class MassStoreRun:
         store the same identifier(s).
         """
         max_tries, tries, wait_time = 3, 0, timedelta(seconds=30)
-        all_checkers = {(analyzer, checker)
-                        for metadata in self.__mips.values()
-                        for analyzer in metadata.checkers.keys()
-                        for checker
-                        in cast(Dict[str, Dict[str, bool]],
-                                metadata.checkers)[analyzer].keys()}
+        all_checkers = {("UNKNOWN", "NOT FOUND")} | \
+            {(analyzer, checker)
+             for metadata in self.__mips.values()
+             for analyzer in metadata.checkers.keys()
+             for checker
+             in cast(Dict[str, Dict[str, bool]], metadata.checkers)
+             [analyzer].keys()}
         while tries < max_tries:
             tries += 1
             try:
@@ -852,12 +853,13 @@ class MassStoreRun:
         detection_time: datetime,
         run_history_time: datetime,
         analysis_info: AnalysisInfo,
-        analyzer_name: Optional[str] = None,
         fixed_at: Optional[datetime] = None
     ) -> int:
         """ Add report to the database. """
         try:
-            checker_name = report.checker_name
+            analyzer_name, checker_name = \
+                getattr(report, "analyzer_name", "UNKNOWN"), \
+                getattr(report, "checker_name", "NOT FOUND")
 
             # Cache the severity of the checkers
             try:
@@ -868,15 +870,21 @@ class MassStoreRun:
                 severity = ttypes.Severity._NAMES_TO_VALUES[severity_name]
                 self.__severity_map[checker_name] = severity
 
+            checker_identifier_object = session.query(CheckerName) \
+                .filter(sqlalchemy.and_(
+                    CheckerName.analyzer_name == analyzer_name,
+                    CheckerName.checker_name == checker_name)) \
+                .first()
+
             db_report = DBReport(
                 run_id, report.report_hash, file_path_to_id[report.file.path],
-                report.message, checker_name or 'NOT FOUND',
+                report.message, checker_identifier_object,
                 report.category, report.type, report.line, report.column,
                 severity, review_status.status, review_status.author,
                 review_status.message, run_history_time,
                 review_status.in_source,
                 detection_status, detection_time,
-                len(report.bug_path_events), analyzer_name)
+                len(report.bug_path_events))
 
             db_report.fixed_at = fixed_at
 
@@ -884,11 +892,10 @@ class MassStoreRun:
                 db_report.analysis_info.append(analysis_info)
 
             session.add(db_report)
-            self.__added_reports.append((db_report, report))
+            session.flush()
+            session.refresh(db_report, ["id"])
 
-            # THE id is none at this point of time
-            # wondering if not returning anything is good?
-            # The report is already handled at the above lines
+            self.__added_reports.append((db_report, report))
             return db_report.id
 
         except Exception as ex:
@@ -1072,7 +1079,7 @@ class MassStoreRun:
                     if old_status == 'resolved' else 'unresolved'
                 detected_at = old_report.detected_at
 
-            analyzer_name = mip.checker_to_analyzer.get(
+            report.analyzer_name = mip.checker_to_analyzer.get(
                 report.checker_name, report.analyzer_name)
 
             rs_from_source = get_review_status_from_source(report)
@@ -1093,7 +1100,7 @@ class MassStoreRun:
             report_id = self.__add_report(
                 session, run_id, report, file_path_to_id,
                 rs_from_source, detection_status, detected_at,
-                run_history_time, analysis_info, analyzer_name, fixed_at)
+                run_history_time, analysis_info, fixed_at)
 
             self.__new_report_hashes[report.report_hash] = \
                 rs_from_source.status

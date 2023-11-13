@@ -11,7 +11,6 @@ SQLAlchemy ORM model for the analysis run storage database.
 from datetime import datetime, timedelta
 from math import ceil
 import os
-from typing import Dict, List
 
 from sqlalchemy import MetaData, Column, Integer, UniqueConstraint, String, \
     DateTime, Boolean, ForeignKey, Binary, Enum, Table, Text
@@ -66,7 +65,7 @@ class AnalysisInfoChecker(Base):
                              ForeignKey("checker_names.id",
                                         deferrable=True,
                                         initially="DEFERRED",
-                                        ondelete="CASCADE"),
+                                        ondelete="RESTRICT"),
                              primary_key=True)
     enabled = Column(Boolean)
 
@@ -403,14 +402,20 @@ class Report(Base):
                     index=True)
     bug_id = Column(String, index=True)
     checker_id = Column(Integer, ForeignKey("checker_names.id",
-                                            deferrable=False),
+                                            deferrable=False,
+                                            ondelete="RESTRICT"),
                         index=True)
+    checker = relationship(CheckerName, innerjoin=True, lazy="joined",
+                           foreign_keys=[checker_id])
 
     # QUESTION: What is this? Why is this useful? Why is this stored here in
     # addition to the analyser-name and checker-name.
     checker_cat = Column(String)
 
     bug_type = Column(String)
+    # TODO: Why is this a member of 'Report'? A severity is uniquely associated
+    # with a checker as per the configuration, so maybe this could be offloaded
+    # into the "checker names" table as well...
     severity = Column(Integer)
     line = Column(Integer)
     column = Column(Integer)
@@ -468,7 +473,7 @@ class Report(Base):
         self.bug_id = bug_id
         self.checker_message = checker_message
         self.severity = severity
-        self.checker_id = checker.id
+        self.checker = checker
         self.checker_cat = checker_cat
         self.bug_type = bug_type
         self.review_status = review_status
