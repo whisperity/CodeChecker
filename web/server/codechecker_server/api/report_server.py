@@ -30,13 +30,18 @@ from sqlalchemy.sql.expression import or_, and_, not_, func, \
 
 import codechecker_api_shared
 from codechecker_api.codeCheckerDBAccess_v6 import constants, ttypes
-from codechecker_api.codeCheckerDBAccess_v6.ttypes import AnalysisInfoFilter, \
-    BlameData, BlameInfo, BugPathPos, CheckerCount, Commit, CommitAuthor, \
-    CommentData, DiffType, Encoding, RunHistoryData, Order, ReportData, \
-    ReportDetails, ReviewData, ReviewStatusRule, ReviewStatusRuleFilter, \
-    ReviewStatusRuleSortMode, ReviewStatusRuleSortType, RunData, RunFilter, \
-    RunReportCount, RunSortType, RunTagCount, SourceComponentData, \
-    SourceFileData, SortMode, SortType, ExportData
+from codechecker_api.codeCheckerDBAccess_v6.ttypes import \
+    AnalysisInfoFilter, \
+    BlameData, BlameInfo, BugPathPos, \
+    CheckerCount, Commit, CommitAuthor, CommentData, \
+    DiffType, \
+    Encoding, ExportData, \
+    Order, \
+    ReportData, ReportDetails, ReviewData, ReviewStatusRule, \
+    ReviewStatusRuleFilter, ReviewStatusRuleSortMode, \
+    ReviewStatusRuleSortType, RunData, RunFilter, RunHistoryData, \
+    RunReportCount, RunSortType, RunTagCount, \
+    SourceComponentData, SourceFileData, SortMode, SortType
 
 from codechecker_common import util
 from codechecker_common.logger import get_logger
@@ -51,10 +56,14 @@ from ..database import db_cleanup
 from ..database.config_db_model import Product
 from ..database.database import conv, DBSession, escape_like
 from ..database.run_db_model import \
-    AnalysisInfo, AnalyzerStatistic, BugPathEvent, BugReportPoint, \
-    CleanupPlan, CleanupPlanReportHash, CheckerName, Comment, File, \
-    FileContent, Report, ReportAnnotations, ReportAnalysisInfo, ReviewStatus, \
-    Run, RunHistory, RunHistoryAnalysisInfo, RunLock, SourceComponent
+    AnalysisInfo, AnalyzerStatistic, \
+    BugPathEvent, BugReportPoint, \
+    CleanupPlan, CleanupPlanReportHash, CheckerName, Comment, \
+    ExtendedReportData, \
+    File, FileContent, \
+    Report, ReportAnnotations, ReportAnalysisInfo, ReviewStatus, Run, \
+    RunHistory, RunHistoryAnalysisInfo, RunLock, \
+    SourceComponent
 
 from .thrift_enum_helper import detection_status_enum, \
     detection_status_str, review_status_enum, review_status_str, \
@@ -973,7 +982,7 @@ def get_sort_map(sort_types, is_unique=False):
         SortType.FILENAME: [(File.filepath, 'filepath'),
                             (Report.line, 'line')],
         SortType.BUG_PATH_LENGTH: [(Report.path_length, 'bug_path_length')],
-        SortType.CHECKER_NAME: [(Report.checker_id, 'checker_id')],
+        SortType.CHECKER_NAME: [(CheckerName.checker_name, 'checker_name')],
         SortType.SEVERITY: [(Report.severity, 'severity')],
         SortType.REVIEW_STATUS: [(Report.review_status, 'rw_status')],
         SortType.DETECTION_STATUS: [(Report.detection_status, 'dt_status')],
@@ -1856,9 +1865,10 @@ class ThriftRequestHandler:
                     .group_by(Report.bug_id) \
                     .subquery()
 
-                # Sort the results
+                # Sort the results.
                 sorted_reports = \
-                    session.query(unique_reports.c.id)
+                    session.query(unique_reports.c.id) \
+                    .join(CheckerName)
 
                 sorted_reports = sort_results_query(sorted_reports,
                                                     sort_types,
