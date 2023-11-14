@@ -44,6 +44,11 @@ header_file_extensions = (
 epilog_env_var = f"""
   CC_ANALYZERS_FROM_PATH   Set to `yes` or `1` to enforce taking the analyzers
                            from the `PATH` instead of the given binaries.
+  CC_ANALYZER_BIN          Set the absolute paths of an analyzer binaries.
+                           Overrides other means of CodeChecker getting hold of
+                           binary.
+                           Format: CC_ANALYZER_BIN='<analyzer1>:/path/to/bin1;
+                                                    <analyzer2>:/path/to/bin2'
   CC_CLANGSA_PLUGIN_DIR    If the CC_ANALYZERS_FROM_PATH environment variable
                            is set you can configure the plugin directory of the
                            Clang Static Analyzer by using this environment
@@ -192,6 +197,15 @@ def add_arguments_to_parser(parser):
                                 "it can contain path glob pattern. "
                                 "Example: '/path/to/main.cpp', 'lib/*.cpp', "
                                 "*/test*'.")
+
+    parser.add_argument('--review-status-config',
+                        dest="review_status_config",
+                        required=False,
+                        type=existing_abspath,
+                        default=argparse.SUPPRESS,
+                        help="Path of review_status.yaml config file which "
+                             "contains review status settings assigned to "
+                             "specific directories, checkers, bug hashes.")
 
     parser.add_argument('-o', '--output',
                         dest="output_path",
@@ -853,6 +867,18 @@ def __update_skip_file(args):
         shutil.copyfile(args.skipfile, skip_file_to_send)
 
 
+def __update_review_status_config(args):
+    rs_config_to_send = os.path.join(args.output_path, 'review_status.yaml')
+
+    if os.path.exists(rs_config_to_send):
+        os.remove(rs_config_to_send)
+
+    if 'review_status_config' in args:
+        LOG.debug("Copying review status config file %s to %s",
+                  args.review_status_config, rs_config_to_send)
+        shutil.copyfile(args.review_status_config, rs_config_to_send)
+
+
 def __cleanup_metadata(metadata_prev, metadata):
     """ Cleanup metadata.
 
@@ -1098,6 +1124,7 @@ def main(args):
                               compile_cmd_count)
 
     __update_skip_file(args)
+    __update_review_status_config(args)
 
     LOG.debug("Cleanup metadata file started.")
     __cleanup_metadata(metadata_prev, metadata)

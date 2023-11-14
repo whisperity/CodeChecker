@@ -11,8 +11,9 @@ Util module.
 import itertools
 import json
 from math import ceil
+from typing import Callable, TextIO
+
 import portalocker
-from typing import Callable
 
 from codechecker_common.logger import get_logger
 
@@ -114,3 +115,16 @@ def load_json(path: str, default=None, lock=False, display_warning=True):
             LOG.warning(ex)
 
     return ret
+
+
+def get_linef(fp: TextIO, line_no: int) -> str:
+    """'fp' should be (readable) file object.
+    Return the line content at line_no or an empty line
+    if there is less lines than line_no.
+    """
+    fp.seek(0)
+    for line in fp:
+        line_no -= 1
+        if line_no == 0:
+            return line
+    return ''
