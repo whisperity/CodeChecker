@@ -200,7 +200,8 @@ class TestBlameInfo(unittest.TestCase):
                 '-c', 'user.name=hello',
                 '-c', 'user.email=world',
                 'commit',
-                '-m', 'message']).communicate()
+                '--no-verify',
+                '-message', 'message']).communicate()
 
             codechecker.store(self._codechecker_cfg, run_name)
 

@@ -70,10 +70,15 @@ def upgrade():
         sa.Column("id", sa.Integer(), autoincrement=True, nullable=False),
         sa.Column("analyzer_name", sa.String(), nullable=True),
         sa.Column("checker_name", sa.String(), nullable=True),
+        sa.Column("severity", sa.Integer()),
         sa.PrimaryKeyConstraint("id", name=op.f("pk_checker_names")),
         sa.UniqueConstraint("analyzer_name", "checker_name",
                             name=op.f("uq_checker_names_analyzer_name"))
     )
+    op.create_index(op.f("ix_checker_names_severity"),
+                    "checker_names",
+                    ["severity"],
+                    unique=False)
 
     op.create_table(
         "analysis_info_checkers",
@@ -102,6 +107,7 @@ def upgrade():
     count = db.query(Report).count()
     checkers_to_reports: Dict[Tuple[str, str], List[int]] = dict()
     checkers_to_ids: Dict[Tuple[str, str], int] = dict()
+    checkers_to_severity: Dict[Tuple[str, str], int] = dict()
     if count:
         def _print_progress(index: int, percent: float):
             LOG.info("[%d/%d] Gathering checkers from 'reports'... "
@@ -110,7 +116,9 @@ def upgrade():
 
         LOG.info("Preparing to pre-fill 'checker_names'...")
 
-        db.add(CheckerName(analyzer_name="UNKNOWN", checker_name="NOT FOUND"))
+        db.add(CheckerName(analyzer_name="UNKNOWN",
+                           checker_name="NOT FOUND",
+                           severity=0))
         db.commit()
 
         LOG.info("Preparing to gather checkers from %d 'reports'...",
@@ -122,8 +130,10 @@ def upgrade():
             reps = checkers_to_reports.get(chk, list())
             reps.append(report.id)
             checkers_to_reports[chk] = reps
+            checkers_to_severity[chk] = report.severity
         for chk in sorted(checkers_to_reports.keys()):
-            obj = CheckerName(analyzer_name=chk[0], checker_name=chk[1])
+            obj = CheckerName(analyzer_name=chk[0], checker_name=chk[1],
+                              severity=checkers_to_severity[chk])
             db.add(obj)
             db.flush()
             db.refresh(obj, ["id"])
@@ -164,6 +174,7 @@ def upgrade():
         # 'checker_names' lookup-table.
         ba.drop_column("checker_id")
         ba.drop_column("analyzer_name")
+        ba.drop_column("severity")
 
         ba.add_column(col_reports_checker_name_id, insert_after="bug_id")
 
@@ -176,7 +187,8 @@ def upgrade():
 
             conn.execute(f"""
                 UPDATE reports
-                SET checker_id = {chk_id}
+                SET
+                    checker_id = {chk_id}
                 WHERE id IN ({','.join(map(str, report_id_list))});
             """)
 
@@ -216,6 +228,7 @@ def downgrade():
     checker_count = db.query(CheckerName).count()
     ids_to_checkers: Dict[int, Tuple[str, str]] = dict()
     checkers_to_reports: Dict[Tuple[str, str], List[int]] = dict()
+    checkers_to_severity: Dict[Tuple[str, str], int] = dict()
     if count and checker_count:
         def _print_progress(index: int, percent: float):
             LOG.info("[%d/%d] Collecting checker names from 'reports'... "
@@ -226,7 +239,9 @@ def downgrade():
         LOG.info("Preparing to ingest %d 'checker_names' from %d 'reports'...",
                  checker_count, count)
         for chk in db.query(CheckerName).all():
-            ids_to_checkers[chk.id] = (chk.analyzer_name, chk.checker_name)
+            chk_name = (chk.analyzer_name, chk.checker_name)
+            ids_to_checkers[chk.id] = chk_name
+            checkers_to_severity[chk_name] = chk.severity
 
         for report in progress(db.query(Report).all(), count,
                                100 // 5,
@@ -241,6 +256,7 @@ def downgrade():
     col_reports_analyzer_name = sa.Column("analyzer_name",
                                           sa.String(), nullable=False,
                                           server_default="unknown")
+    col_reports_severity = sa.Column("severity", sa.Integer())
 
     LOG.info("Downgrading 'reports' table structure...")
     if dialect == "sqlite":
@@ -261,6 +277,7 @@ def downgrade():
         # Restore the columns that were deleted in this revision.
         ba.add_column(col_reports_analyzer_name, insert_after="bug_id")
         ba.add_column(col_reports_checker_id, insert_after="analyzer_name")
+        ba.add_column(col_reports_severity, insert_after="checker_id")
 
     if count:
         LOG.info("Preparing to downgrade %d 'reports'...", count)
@@ -270,7 +287,10 @@ def downgrade():
 
             conn.execute(f"""
                 UPDATE reports
-                SET analyzer_name = "{chk[0]}", checker_id = "{chk[1]}"
+                SET
+                    analyzer_name = "{chk[0]}",
+                    checker_id = "{chk[1]}",
+                    severity = "{checkers_to_severity[chk]}"
                 WHERE id IN ({','.join(map(str, report_id_list))});
             """)
 
@@ -287,6 +307,7 @@ def downgrade():
 
     # Drop all tables and columns that were created in this revision.
     # This data is not needed anymore.
+    op.drop_index(op.f("ix_checker_names_severity"))
     op.drop_table("analysis_info_checkers")
     op.drop_table("checker_names")
 

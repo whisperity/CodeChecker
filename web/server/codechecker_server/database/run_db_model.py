@@ -42,14 +42,16 @@ class CheckerName(Base):
     id = Column(Integer, autoincrement=True, primary_key=True)
     analyzer_name = Column(String)
     checker_name = Column(String)
+    severity = Column(Integer, index=True)
 
     __table_args__ = (
         UniqueConstraint("analyzer_name", "checker_name"),
     )
 
-    def __init__(self, analyzer_name: str, checker_name: str):
+    def __init__(self, analyzer_name: str, checker_name: str, severity: int):
         self.analyzer_name = analyzer_name
         self.checker_name = checker_name
+        self.severity = severity
 
 
 class AnalysisInfoChecker(Base):
@@ -404,6 +406,7 @@ class Report(Base):
     checker_id = Column(Integer, ForeignKey("checker_names.id",
                                             deferrable=False,
                                             ondelete="RESTRICT"),
+                        nullable=False,
                         index=True)
     checker = relationship(CheckerName, innerjoin=True, lazy="joined",
                            foreign_keys=[checker_id])
@@ -413,10 +416,6 @@ class Report(Base):
     checker_cat = Column(String)
 
     bug_type = Column(String)
-    # TODO: Why is this a member of 'Report'? A severity is uniquely associated
-    # with a checker as per the configuration, so maybe this could be offloaded
-    # into the "checker names" table as well...
-    severity = Column(Integer)
     line = Column(Integer)
     column = Column(Integer)
     path_length = Column(Integer)
@@ -464,15 +463,13 @@ class Report(Base):
     # Priority/severity etc...
     def __init__(self, run_id, bug_id, file_id, checker_message,
                  checker: CheckerName, checker_cat, bug_type, line, column,
-                 severity, review_status, review_status_author,
-                 review_status_message, review_status_date,
-                 review_status_is_in_source, detection_status, detection_date,
-                 path_length):
+                 review_status, review_status_author, review_status_message,
+                 review_status_date, review_status_is_in_source,
+                 detection_status, detection_date, path_length):
         self.run_id = run_id
         self.file_id = file_id
         self.bug_id = bug_id
         self.checker_message = checker_message
-        self.severity = severity
         self.checker = checker
         self.checker_cat = checker_cat
         self.bug_type = bug_type
