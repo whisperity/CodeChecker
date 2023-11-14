@@ -34,9 +34,9 @@ class MigrationFormatter(logging.Formatter):
     in the log output.
     """
     def __init__(self):
-        super().__init__(fmt="[%(levelname)s][%(asctime)s] " \
-                             "{%(name)s/report} " \
-                             "%(schemaVersion)s:%(lineno)d " \
+        super().__init__(fmt="[%(levelname)s][%(asctime)s] "
+                             "{migration/report} "
+                             "[%(schemaVersion)s]:%(lineno)d "
                              "- %(message)s",
                          datefmt="%Y-%m-%d %H:%M:%S")
 

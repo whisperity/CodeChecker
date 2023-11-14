@@ -984,7 +984,7 @@ def get_sort_map(sort_types, is_unique=False):
                             (Report.line, 'line')],
         SortType.BUG_PATH_LENGTH: [(Report.path_length, 'bug_path_length')],
         SortType.CHECKER_NAME: [(CheckerName.checker_name, 'checker_name')],
-        SortType.SEVERITY: [(Report.severity, 'severity')],
+        SortType.SEVERITY: [(CheckerName.severity, 'severity')],
         SortType.REVIEW_STATUS: [(Report.review_status, 'rw_status')],
         SortType.DETECTION_STATUS: [(Report.detection_status, 'dt_status')],
         SortType.TIMESTAMP: [('annotation_timestamp', 'annotation_timestamp')]}
