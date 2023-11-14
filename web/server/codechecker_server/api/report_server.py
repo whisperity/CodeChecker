@@ -965,14 +965,14 @@ def apply_report_filter(q, filter_expression, join_tables):
     Applies the given filter expression and joins the File, Run and RunHistory
     tables if necessary based on join_tables parameter.
     """
+    if CheckerName in join_tables:
+        q = q.outerjoin(CheckerName, CheckerName.id == Report.checker_id)
     if File in join_tables:
         q = q.outerjoin(File, Report.file_id == File.id)
     if Run in join_tables:
         q = q.outerjoin(Run, Run.id == Report.run_id)
     if RunHistory in join_tables:
         q = q.outerjoin(RunHistory, RunHistory.run_id == Report.run_id)
-    if CheckerName in join_tables:
-        q = q.join(CheckerName, CheckerName.id == Report.checker_id)
 
     return q.filter(filter_expression)
 
@@ -1869,22 +1869,21 @@ class ThriftRequestHandler:
 
                 # Sort the results.
                 sorted_reports = session.query(unique_reports.c.id)
-
                 sorted_reports = sort_results_query(sorted_reports,
                                                     sort_types,
                                                     sort_type_map,
                                                     order_type_map,
                                                     True)
-
                 sorted_reports = sorted_reports \
                     .limit(limit).offset(offset).subquery()
 
                 q = session.query(Report,
                                   File.filename,
-                                  *annotation_cols.values())
-                if CheckerName not in join_tables:
-                    q = q.join(CheckerName)
-                q = q.outerjoin(
+                                  *annotation_cols.values()) \
+                    .outerjoin(
+                        CheckerName,
+                        Report.checker_id == CheckerName.id) \
+                    .outerjoin(
                         File,
                         Report.file_id == File.id) \
                     .outerjoin(
@@ -1966,10 +1965,11 @@ class ThriftRequestHandler:
                                   *annotation_cols.values()) \
                     .outerjoin(
                         ReportAnnotations,
-                        Report.id == ReportAnnotations.report_id) \
+                        Report.id == ReportAnnotations.report_id)
 
                 if CheckerName not in join_tables:
-                    q = q.join(CheckerName)
+                    q = q.outerjoin(CheckerName,
+                                    Report.checker_id == CheckerName.id)
                 if File not in join_tables:
                     q = q.outerjoin(File, Report.file_id == File.id)
 
@@ -1982,8 +1982,9 @@ class ThriftRequestHandler:
                 q = q.group_by(Report.id, File.id)
 
                 q = apply_report_filter(q, filter_expression, join_tables)
-
-                q = sort_results_query(q, sort_types, sort_type_map,
+                q = sort_results_query(q,
+                                       sort_types,
+                                       sort_type_map,
                                        order_type_map)
 
                 if report_filter.annotations is not None:
