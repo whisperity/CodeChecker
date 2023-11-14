@@ -567,6 +567,7 @@ class MassStoreRun:
                     for r in unknown_checkers:
                         anal, chk = r[0], r[1]
                         s = self.__context.checker_labels.severity(r[1])
+                        s = ttypes.Severity._NAMES_TO_VALUES[s]
                         session.add(Checker(anal, chk, s))
 
                     session.commit()
