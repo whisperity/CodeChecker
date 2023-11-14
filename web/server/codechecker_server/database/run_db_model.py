@@ -64,7 +64,7 @@ class AnalysisInfoChecker(Base):
                                          ondelete="CASCADE"),
                               primary_key=True)
     checker_id = Column(Integer,
-                        ForeignKey("checker.id",
+                        ForeignKey("checkers.id",
                                    deferrable=True,
                                    initially="DEFERRED",
                                    ondelete="RESTRICT"),
