@@ -965,7 +965,7 @@ def apply_report_filter(q, filter_expression, join_tables):
     Applies the given filter expression and joins the File, Run and RunHistory
     tables if necessary based on join_tables parameter.
     """
-    if Checkerin join_tables:
+    if Checker in join_tables:
         q = q.outerjoin(Checker, Checker.id == Report.checker_id)
     if File in join_tables:
         q = q.outerjoin(File, Report.file_id == File.id)
@@ -1967,7 +1967,7 @@ class ThriftRequestHandler:
                         ReportAnnotations,
                         Report.id == ReportAnnotations.report_id)
 
-                if Checkernot in join_tables:
+                if Checker not in join_tables:
                     q = q.outerjoin(Checker,
                                     Report.checker_id == Checker.id)
                 if File not in join_tables:
@@ -2769,7 +2769,7 @@ class ThriftRequestHandler:
                 .query(Report.bug_id,
                        Checker.checker_name,
                        Checker.severity)
-            if Checkernot in join_tables:
+            if Checker not in join_tables:
                 extended_table = extended_table.join(Checker)
 
             if report_filter.annotations is not None:
@@ -2840,7 +2840,7 @@ class ThriftRequestHandler:
             extended_table = session \
                 .query(Checker.analyzer_name,
                        Report.bug_id)
-            if Checkernot in join_tables:
+            if Checker not in join_tables:
                 extended_table = extended_table.join(Checker)
 
             if report_filter.annotations is not None:

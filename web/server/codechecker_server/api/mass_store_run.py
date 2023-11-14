@@ -270,7 +270,6 @@ class MassStoreRun:
         self.__report_limit: int = 0
         self.__wrong_src_code_comments: List[str] = []
         self.__already_added_report_hashes: Set[str] = set()
-        self.__severity_map: Dict[str, int] = {}
         self.__new_report_hashes: Dict[str, Tuple] = {}
         self.__all_report_checkers: Set[str] = set()
         self.__added_reports: List[Tuple[DBReport, Report]] = list()
@@ -614,20 +613,21 @@ class MassStoreRun:
                                       for r in known_checkers}
                     unknown_checkers = all_checkers - known_checkers
                     for r in unknown_checkers:
-                        # FIXME: Severity should be looked up and added here!
-                        session.add(Checker(*r, severity=0))
+                        anal, chk = r[0], r[1]
+                        s = self.__context.checker_labels.severity(r[1])
+                        session.add(Checker(anal, chk, s))
 
                     session.commit()
                     return
             except (sqlalchemy.exc.OperationalError,
                     sqlalchemy.exc.ProgrammingError) as ex:
-                LOG.error("Storing checker names of run '%s' failed: %s.\n"
+                LOG.error("Storing checkers of run '%s' failed: %s.\n"
                           "Waiting %d before trying again...",
                           self.__name, ex, wait_time)
                 time.sleep(wait_time.total_seconds())
                 wait_time *= 2
             except Exception as ex:
-                LOG.error("Failed to store checker names due to other error: "
+                LOG.error("Failed to store checkers due to some other error: "
                           "%s", ex)
                 import traceback
                 traceback.print_exc()
@@ -861,15 +861,6 @@ class MassStoreRun:
             analyzer_name, checker_name = \
                 getattr(report, "analyzer_name", "UNKNOWN"), \
                 getattr(report, "checker_name", "NOT FOUND")
-
-            # # Cache the severity of the checkers
-            # try:
-            #     severity = self.__severity_map[checker_name]
-            # except KeyError:
-            #     severity_name = \
-            #         self.__context.checker_labels.severity(checker_name)
-            #     severity = ttypes.Severity._NAMES_TO_VALUES[severity_name]
-            #     self.__severity_map[checker_name] = severity
 
             checker_identifier_object = session.query(Checker) \
                 .filter(sqlalchemy.and_(
@@ -1225,7 +1216,6 @@ class MassStoreRun:
         self.__already_added_report_hashes = set()
         self.__new_report_hashes = dict()
         self.__all_report_checkers = set()
-        self.__severity_map = dict()
 
         all_reports = session.query(DBReport) \
             .filter(DBReport.run_id == run_id) \
