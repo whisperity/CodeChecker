@@ -58,7 +58,7 @@ from ..database.database import conv, DBSession, escape_like
 from ..database.run_db_model import \
     AnalysisInfo, AnalyzerStatistic, \
     BugPathEvent, BugReportPoint, \
-    CleanupPlan, CleanupPlanReportHash, CheckerName, Comment, \
+    CleanupPlan, CleanupPlanReportHash, Checker, Comment, \
     ExtendedReportData, \
     File, FileContent, \
     Report, ReportAnnotations, ReportAnalysisInfo, ReviewStatus, Run, \
@@ -243,16 +243,16 @@ def process_report_filter(
 
     if report_filter.checkerName or report_filter.analyzerNames:
         if report_filter.checkerName:
-            OR = [CheckerName.checker_name.ilike(conv(cn))
+            OR = [Checker.checker_name.ilike(conv(cn))
                   for cn in report_filter.checkerName]
             AND.append(or_(*OR))
 
         if report_filter.analyzerNames:
-            OR = [CheckerName.analyzer_name.ilike(conv(an))
+            OR = [Checker.analyzer_name.ilike(conv(an))
                   for an in report_filter.analyzerNames]
             AND.append(or_(*OR))
 
-        join_tables.append(CheckerName)
+        join_tables.append(Checker)
 
     if report_filter.runName:
         OR = [Run.name.ilike(conv(rn))
@@ -292,8 +292,8 @@ def process_report_filter(
         AND.append(or_(*OR))
 
     if report_filter.severity:
-        AND.append(CheckerName.severity.in_(report_filter.severity))
-        join_tables.append(CheckerName)
+        AND.append(Checker.severity.in_(report_filter.severity))
+        join_tables.append(Checker)
 
     if report_filter.detectionStatus:
         dst = list(map(detection_status_str,
@@ -965,8 +965,8 @@ def apply_report_filter(q, filter_expression, join_tables):
     Applies the given filter expression and joins the File, Run and RunHistory
     tables if necessary based on join_tables parameter.
     """
-    if CheckerName in join_tables:
-        q = q.outerjoin(CheckerName, CheckerName.id == Report.checker_id)
+    if Checkerin join_tables:
+        q = q.outerjoin(Checker, Checker.id == Report.checker_id)
     if File in join_tables:
         q = q.outerjoin(File, Report.file_id == File.id)
     if Run in join_tables:
@@ -983,8 +983,8 @@ def get_sort_map(sort_types, is_unique=False):
         SortType.FILENAME: [(File.filepath, 'filepath'),
                             (Report.line, 'line')],
         SortType.BUG_PATH_LENGTH: [(Report.path_length, 'bug_path_length')],
-        SortType.CHECKER_NAME: [(CheckerName.checker_name, 'checker_name')],
-        SortType.SEVERITY: [(CheckerName.severity, 'severity')],
+        SortType.CHECKER_NAME: [(Checker.checker_name, 'checker_name')],
+        SortType.SEVERITY: [(Checker.severity, 'severity')],
         SortType.REVIEW_STATUS: [(Report.review_status, 'rw_status')],
         SortType.DETECTION_STATUS: [(Report.detection_status, 'dt_status')],
         SortType.TIMESTAMP: [('annotation_timestamp', 'annotation_timestamp')]}
@@ -1881,8 +1881,8 @@ class ThriftRequestHandler:
                                   File.filename,
                                   *annotation_cols.values()) \
                     .outerjoin(
-                        CheckerName,
-                        Report.checker_id == CheckerName.id) \
+                        Checker,
+                        Report.checker_id == Checker.id) \
                     .outerjoin(
                         File,
                         Report.file_id == File.id) \
@@ -1967,9 +1967,9 @@ class ThriftRequestHandler:
                         ReportAnnotations,
                         Report.id == ReportAnnotations.report_id)
 
-                if CheckerName not in join_tables:
-                    q = q.outerjoin(CheckerName,
-                                    Report.checker_id == CheckerName.id)
+                if Checkernot in join_tables:
+                    q = q.outerjoin(Checker,
+                                    Report.checker_id == Checker.id)
                 if File not in join_tables:
                     q = q.outerjoin(File, Report.file_id == File.id)
 
@@ -2767,10 +2767,10 @@ class ThriftRequestHandler:
 
             extended_table = session \
                 .query(Report.bug_id,
-                       CheckerName.checker_name,
-                       CheckerName.severity)
-            if CheckerName not in join_tables:
-                extended_table = extended_table.join(CheckerName)
+                       Checker.checker_name,
+                       Checker.severity)
+            if Checkernot in join_tables:
+                extended_table = extended_table.join(Checker)
 
             if report_filter.annotations is not None:
                 extended_table = extended_table.outerjoin(
@@ -2838,10 +2838,10 @@ class ThriftRequestHandler:
                 session, run_ids, report_filter, cmp_data)
 
             extended_table = session \
-                .query(CheckerName.analyzer_name,
+                .query(Checker.analyzer_name,
                        Report.bug_id)
-            if CheckerName not in join_tables:
-                extended_table = extended_table.join(CheckerName)
+            if Checkernot in join_tables:
+                extended_table = extended_table.join(Checker)
 
             if report_filter.annotations is not None:
                 extended_table = extended_table.outerjoin(
@@ -2898,9 +2898,9 @@ class ThriftRequestHandler:
 
             extended_table = session \
                 .query(Report.bug_id,
-                       CheckerName.severity)
-            if CheckerName not in join_tables:
-                extended_table = extended_table.join(CheckerName)
+                       Checker.severity)
+            if Checker not in join_tables:
+                extended_table = extended_table.join(Checker)
 
             if report_filter.annotations is not None:
                 extended_table = extended_table.outerjoin(

@@ -32,12 +32,12 @@ CC_META = MetaData(naming_convention={
 Base = declarative_base(metadata=CC_META)
 
 
-class CheckerName(Base):
+class Checker(Base):
     """
     Records of a look-up table that associates a product-global ID for each
     analyzer name and checker name encountered.
     """
-    __tablename__ = "checker_names"
+    __tablename__ = "checkers"
 
     id = Column(Integer, autoincrement=True, primary_key=True)
     analyzer_name = Column(String)
@@ -63,20 +63,20 @@ class AnalysisInfoChecker(Base):
                                          initially="DEFERRED",
                                          ondelete="CASCADE"),
                               primary_key=True)
-    checker_name_id = Column(Integer,
-                             ForeignKey("checker_names.id",
-                                        deferrable=True,
-                                        initially="DEFERRED",
-                                        ondelete="RESTRICT"),
-                             primary_key=True)
+    checker_id = Column(Integer,
+                        ForeignKey("checker.id",
+                                   deferrable=True,
+                                   initially="DEFERRED",
+                                   ondelete="RESTRICT"),
+                        primary_key=True)
     enabled = Column(Boolean)
 
     def __init__(self,
                  analysis_info: "AnalysisInfo",
-                 checker_name: CheckerName,
+                 checker: Checker,
                  is_enabled: bool):
         self.analysis_info_id = analysis_info.id
-        self.checker_name_id = checker_name.id
+        self.checker_id = checker.id
         self.enabled = is_enabled
 
 
@@ -403,12 +403,12 @@ class Report(Base):
                                ondelete='CASCADE'),
                     index=True)
     bug_id = Column(String, index=True)
-    checker_id = Column(Integer, ForeignKey("checker_names.id",
+    checker_id = Column(Integer, ForeignKey("checkers.id",
                                             deferrable=False,
                                             ondelete="RESTRICT"),
                         nullable=False,
                         index=True)
-    checker = relationship(CheckerName, innerjoin=True, lazy="joined",
+    checker = relationship(Checker, innerjoin=True, lazy="joined",
                            foreign_keys=[checker_id])
 
     # QUESTION: What is this? Why is this useful? Why is this stored here in
@@ -462,7 +462,7 @@ class Report(Base):
 
     # Priority/severity etc...
     def __init__(self, run_id, bug_id, file_id, checker_message,
-                 checker: CheckerName, checker_cat, bug_type, line, column,
+                 checker: Checker, checker_cat, bug_type, line, column,
                  review_status, review_status_author, review_status_message,
                  review_status_date, review_status_is_in_source,
                  detection_status, detection_date, path_length):

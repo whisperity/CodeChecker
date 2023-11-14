@@ -69,24 +69,24 @@ def upgrade():
 
     def create_new_tables():
         op.create_table(
-            "checker_names",
+            "checkers",
             sa.Column("id", sa.Integer(), autoincrement=True, nullable=False),
             sa.Column("analyzer_name", sa.String(), nullable=True),
             sa.Column("checker_name", sa.String(), nullable=True),
             sa.Column("severity", sa.Integer()),
-            sa.PrimaryKeyConstraint("id", name=op.f("pk_checker_names")),
+            sa.PrimaryKeyConstraint("id", name=op.f("pk_checkers")),
             sa.UniqueConstraint("analyzer_name", "checker_name",
-                                name=op.f("uq_checker_names_analyzer_name"))
+                                name=op.f("uq_checkers_analyzer_name"))
         )
-        op.create_index(op.f("ix_checker_names_severity"),
-                        "checker_names",
+        op.create_index(op.f("ix_checkers_severity"),
+                        "checkers",
                         ["severity"],
                         unique=False)
 
         op.create_table(
             "analysis_info_checkers",
             sa.Column("analysis_info_id", sa.Integer(), nullable=False),
-            sa.Column("checker_name_id", sa.Integer(), nullable=False),
+            sa.Column("checker_id", sa.Integer(), nullable=False),
             sa.Column("enabled", sa.Boolean(), nullable=True),
             sa.ForeignKeyConstraint(
                 ["analysis_info_id"], ["analysis_info.id"],
@@ -94,24 +94,24 @@ def upgrade():
                 ondelete="CASCADE", initially="DEFERRED",
                 deferrable=True),
             sa.ForeignKeyConstraint(
-                ["checker_name_id"], ["checker_names.id"],
-                name=op.f("fk_analysis_info_checkers_checker_name_id_checker_names"),
+                ["checker_id"], ["checkers.id"],
+                name=op.f("fk_analysis_info_checkers_checker_id_checkers"),
                 ondelete="RESTRICT", initially="DEFERRED", deferrable=True),
-            sa.PrimaryKeyConstraint("analysis_info_id", "checker_name_id",
+            sa.PrimaryKeyConstraint("analysis_info_id", "checker_id",
                                     name=op.f("pk_analysis_info_checkers"))
         )
 
-    def get_and_add_checker_names_from_reports():
+    def get_and_add_checkers_from_reports():
         # Pre-allocate IDs in the look-up table for all checkers that were
         # encountered according to the currently present reports in the DB.
         Base = automap_base()
         Base.prepare(conn, reflect=True)
         Report = Base.classes.reports  # 'reports' is the table name!
-        CheckerName = Base.classes.checker_names
+        Checker = Base.classes.checkers
 
-        db.add(CheckerName(analyzer_name="UNKNOWN",
-                           checker_name="NOT FOUND",
-                           severity=0))
+        db.add(Checker(analyzer_name="UNKNOWN",
+                       checker_name="NOT FOUND",
+                       severity=0))
         db.commit()
 
         count = db.query(Report).count()
@@ -124,7 +124,7 @@ def upgrade():
                          "%.0f%% done. %d checkers found.",
                          index, count, percent, len(checkers_to_reports))
 
-            LOG.info("Preparing to pre-fill 'checker_names'...")
+            LOG.info("Preparing to pre-fill 'checkers'...")
             LOG.info("Preparing to gather checkers from %d 'reports'...",
                      count)
             for report in progress(db.query(Report).all(), count,
@@ -137,15 +137,15 @@ def upgrade():
                 checkers_to_severity[chk] = report.severity
 
             for chk in sorted(checkers_to_reports.keys()):
-                obj = CheckerName(analyzer_name=chk[0], checker_name=chk[1],
-                                  severity=checkers_to_severity[chk])
+                obj = Checker(analyzer_name=chk[0], checker_name=chk[1],
+                              severity=checkers_to_severity[chk])
                 db.add(obj)
                 db.flush()
                 db.refresh(obj, ["id"])
                 checkers_to_ids[chk] = obj.id
 
             db.commit()
-            LOG.info("Done pre-filling 'checker_names'.")
+            LOG.info("Done pre-filling 'checkers'.")
 
         return count, checkers_to_reports, checkers_to_ids
 
@@ -172,10 +172,10 @@ def upgrade():
                          (done_report_count * 100.0 / count))
 
     def upgrade_reports_table_columns():
-        # Upgrade the 'reports' table to use the 'checker_names' foreign look-up
+        # Upgrade the 'reports' table to use the 'checkers' foreign look-up
         # instead of containing the strings allocated locally with the record.
-        col_reports_checker_name_id = sa.Column("checker_id", sa.Integer(),
-                                                nullable=True)
+        col_reports_checker_id = sa.Column("checker_id", sa.Integer(),
+                                           nullable=True)
 
         LOG.info("Upgrading 'reports' table structure...")
         if dialect == "sqlite":
@@ -189,11 +189,11 @@ def upgrade():
                                            else "auto") as ba:
             ba.drop_column("checker_id")
             # These columns are deleted as this data is now available through
-            # the 'checker_names' lookup-table.
+            # the 'checkers' lookup-table.
             ba.drop_column("analyzer_name")
             ba.drop_column("severity")
 
-            ba.add_column(col_reports_checker_name_id, insert_after="bug_id")
+            ba.add_column(col_reports_checker_id, insert_after="bug_id")
 
         if dialect == "sqlite":
             op.execute("PRAGMA foreign_keys=ON;")
@@ -205,8 +205,8 @@ def upgrade():
             "unique": False
         }
         fk_reports_checker_id = {
-            "constraint_name": op.f("fk_reports_checker_id_checker_names"),
-            "referent_table": "checker_names",
+            "constraint_name": op.f("fk_reports_checker_id_checkers"),
+            "referent_table": "checkers",
             "local_cols": ["checker_id"],
             "remote_cols": ["id"],
             "deferrable": False,
@@ -229,7 +229,7 @@ def upgrade():
     upgrade_analysis_info()
     create_new_tables()
     report_count, checkers_to_reports, checkers_to_ids = \
-        get_and_add_checker_names_from_reports()
+        get_and_add_checkers_from_reports()
     upgrade_reports_table_columns()
     upgrade_reports(report_count, checkers_to_reports, checkers_to_ids)
     upgrade_reports_table_constraints()
@@ -268,17 +268,17 @@ def downgrade():
             LOG.info("Done downgrading 'analysis_info'.")
             db.commit()
 
-    def get_checker_names_and_associated_reports():
+    def get_checkers_and_associated_reports():
         Base = automap_base()
         Base.prepare(conn, reflect=True)
 
         # Revert the introduction of a lookup table to identify checkers,
         # back-inserting the relevant information to the 'reports' table.
         Report = Base.classes.reports  # 'reports' is the table name!
-        CheckerName = Base.classes.checker_names
+        Checker = Base.classes.checkers
 
         count = db.query(Report).count()
-        checker_count = db.query(CheckerName).count()
+        checker_count = db.query(Checker).count()
         ids_to_checkers: Dict[int, Tuple[str, str]] = dict()
         checkers_to_reports: Dict[Tuple[str, str], List[int]] = dict()
         checkers_to_severity: Dict[Tuple[str, str], int] = dict()
@@ -288,9 +288,9 @@ def downgrade():
                          "%.0f%% done.",
                          index, count, percent)
 
-            LOG.info("Preparing to backfill %d 'checker_names' into %d "
+            LOG.info("Preparing to backfill %d 'checkers' into %d "
                      "'reports'...", checker_count, count)
-            for chk in db.query(CheckerName).all():
+            for chk in db.query(Checker).all():
                 chk_name = (chk.analyzer_name, chk.checker_name)
                 ids_to_checkers[chk.id] = chk_name
                 checkers_to_severity[chk_name] = chk.severity
@@ -324,7 +324,7 @@ def downgrade():
                                            else "auto") as ba:
             # Drop the column that was introduced in this revision.
             ba.drop_constraint(
-                op.f("fk_reports_checker_id_checker_names"))
+                op.f("fk_reports_checker_id_checkers"))
             ba.drop_index(op.f("ix_reports_checker_id"))
             ba.drop_column("checker_id")
 
@@ -359,19 +359,19 @@ def downgrade():
                          len(report_id_list),
                          (done_report_count * 100.0 / count))
             db.commit()
-            LOG.info("Done inserting 'checker_names' back into 'reports'.")
+            LOG.info("Done inserting 'checkers' back into 'reports'.")
         pass
 
     def drop_new_tables():
         # Drop all tables and columns that were created in this revision.
         # This data is not needed anymore.
-        op.drop_index(op.f("ix_checker_names_severity"))
+        op.drop_index(op.f("ix_checkers_severity"))
         op.drop_table("analysis_info_checkers")
-        op.drop_table("checker_names")
+        op.drop_table("checkers")
 
     downgrade_analysis_info()
     report_count, checkers_to_reports, checkers_to_severity = \
-        get_checker_names_and_associated_reports()
+        get_checkers_and_associated_reports()
     downgrade_report_table_columns()
     downgrade_reports(report_count, checkers_to_reports, checkers_to_severity)
     drop_new_tables()

@@ -38,7 +38,7 @@ from ..database import db_cleanup
 from ..database.config_db_model import Product
 from ..database.database import DBSession
 from ..database.run_db_model import AnalysisInfo, AnalysisInfoChecker, \
-    AnalyzerStatistic, BugPathEvent, BugReportPoint, CheckerName, \
+    AnalyzerStatistic, BugPathEvent, BugReportPoint, Checker, \
     ExtendedReportData, File, FileContent, Report as DBReport, \
     ReportAnnotations, ReviewStatus as ReviewStatusRule, Run, RunHistory, \
     RunLock
@@ -608,13 +608,14 @@ class MassStoreRun:
             try:
                 LOG.debug("[%s] Begin attempt %d...", self.__name, tries)
                 with DBSession(self.__Session) as session:
-                    known_checkers = session.query(CheckerName) \
+                    known_checkers = session.query(Checker) \
                         .all()
                     known_checkers = {(r.analyzer_name, r.checker_name)
                                       for r in known_checkers}
                     unknown_checkers = all_checkers - known_checkers
                     for r in unknown_checkers:
-                        session.add(CheckerName(*r))
+                        # FIXME: Severity should be looked up and added here!
+                        session.add(Checker(*r, severity=0))
 
                     session.commit()
                     return
@@ -734,8 +735,8 @@ class MassStoreRun:
                             in cast(Dict[str, Dict[str, bool]],
                                     mip.checkers).items():
                         db_checkers = session \
-                            .query(CheckerName) \
-                            .filter(CheckerName.analyzer_name == analyzer) \
+                            .query(Checker) \
+                            .filter(Checker.analyzer_name == analyzer) \
                             .all()
                         db_checkers = {r.checker_name: r for r in db_checkers}
 
@@ -861,29 +862,28 @@ class MassStoreRun:
                 getattr(report, "analyzer_name", "UNKNOWN"), \
                 getattr(report, "checker_name", "NOT FOUND")
 
-            # Cache the severity of the checkers
-            try:
-                severity = self.__severity_map[checker_name]
-            except KeyError:
-                severity_name = \
-                    self.__context.checker_labels.severity(checker_name)
-                severity = ttypes.Severity._NAMES_TO_VALUES[severity_name]
-                self.__severity_map[checker_name] = severity
+            # # Cache the severity of the checkers
+            # try:
+            #     severity = self.__severity_map[checker_name]
+            # except KeyError:
+            #     severity_name = \
+            #         self.__context.checker_labels.severity(checker_name)
+            #     severity = ttypes.Severity._NAMES_TO_VALUES[severity_name]
+            #     self.__severity_map[checker_name] = severity
 
-            checker_identifier_object = session.query(CheckerName) \
+            checker_identifier_object = session.query(Checker) \
                 .filter(sqlalchemy.and_(
-                    CheckerName.analyzer_name == analyzer_name,
-                    CheckerName.checker_name == checker_name)) \
+                    Checker.analyzer_name == analyzer_name,
+                    Checker.checker_name == checker_name)) \
                 .first()
 
             db_report = DBReport(
                 run_id, report.report_hash, file_path_to_id[report.file.path],
                 report.message, checker_identifier_object,
                 report.category, report.type, report.line, report.column,
-                severity, review_status.status, review_status.author,
+                review_status.status, review_status.author,
                 review_status.message, run_history_time,
-                review_status.in_source,
-                detection_status, detection_time,
+                review_status.in_source, detection_status, detection_time,
                 len(report.bug_path_events))
 
             db_report.fixed_at = fixed_at
