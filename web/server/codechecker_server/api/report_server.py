@@ -146,6 +146,8 @@ def exc_to_thrift_reqfail(func):
         except sqlalchemy.exc.SQLAlchemyError as alchemy_ex:
             # Convert SQLAlchemy exceptions.
             msg = str(alchemy_ex)
+            import traceback
+            traceback.print_exc()
             raise codechecker_api_shared.ttypes.RequestFailed(
                 codechecker_api_shared.ttypes.ErrorCode.DATABASE, msg)
         except codechecker_api_shared.ttypes.RequestFailed as rf:
