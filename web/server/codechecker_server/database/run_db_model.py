@@ -411,8 +411,8 @@ class Report(Base):
     checker = relationship(Checker, innerjoin=True, lazy="joined",
                            foreign_keys=[checker_id])
 
-    # QUESTION: What is this? Why is this useful? Why is this stored here in
-    # addition to the analyser-name and checker-name.
+    # FIXME: The executive decision is to annihilate this field! It's really NOT
+    # used anywhere...
     checker_cat = Column(String)
 
     bug_type = Column(String)

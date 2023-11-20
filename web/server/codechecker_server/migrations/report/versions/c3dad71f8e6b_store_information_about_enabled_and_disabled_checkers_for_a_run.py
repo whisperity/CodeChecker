@@ -149,7 +149,7 @@ def upgrade():
 
         return count, checkers_to_reports, checkers_to_ids
 
-    def upgrade_reports(count, checkers_to_reports, checkers_to_ids):
+    def upgrade_reports(count: int, checkers_to_reports, checkers_to_ids):
         if count:
             LOG.info("Preparing to upgrade %d 'reports'...", count)
             done_report_count = 0
@@ -171,17 +171,20 @@ def upgrade():
                          len(report_id_list),
                          (done_report_count * 100.0 / count))
 
-    def upgrade_reports_table_columns():
+    def upgrade_reports_table_columns(has_any_reports: bool):
         # Upgrade the 'reports' table to use the 'checkers' foreign look-up
         # instead of containing the strings allocated locally with the record.
         col_reports_checker_id = sa.Column("checker_id", sa.Integer(),
                                            nullable=True)
 
-        LOG.info("Upgrading 'reports' table structure...")
+        if has_any_reports:
+            LOG.info("Upgrading 'reports' table structure...")
+            if dialect == "sqlite":
+                LOG.warning("On SQLite databases, column changes require the "
+                            "creation of a new temporary table. If you have "
+                            "many reports, this might take a while...")
+
         if dialect == "sqlite":
-            LOG.warning("On SQLite databases, column changes require the "
-                        "creation of a new temporary table. If you have many "
-                        "reports, this might take a while...")
             op.execute("PRAGMA foreign_keys=OFF;")
 
         with op.batch_alter_table("reports",
@@ -197,6 +200,9 @@ def upgrade():
 
         if dialect == "sqlite":
             op.execute("PRAGMA foreign_keys=ON;")
+
+        if has_any_reports:
+            LOG.info("Done upgrading 'reports' table structure.")
 
     def upgrade_reports_table_constraints():
         ix_reports_checker_id = {
@@ -230,7 +236,7 @@ def upgrade():
     create_new_tables()
     report_count, checkers_to_reports, checkers_to_ids = \
         get_and_add_checkers_from_reports()
-    upgrade_reports_table_columns()
+    upgrade_reports_table_columns(report_count > 0)
     upgrade_reports(report_count, checkers_to_reports, checkers_to_ids)
     upgrade_reports_table_constraints()
 
@@ -305,18 +311,21 @@ def downgrade():
 
         return count, checkers_to_reports, checkers_to_severity
 
-    def downgrade_report_table_columns():
+    def downgrade_report_table_columns(has_any_reports: bool):
         col_reports_checker_id = sa.Column("checker_id", sa.String())
         col_reports_analyzer_name = sa.Column("analyzer_name",
                                               sa.String(), nullable=False,
                                               server_default="unknown")
         col_reports_severity = sa.Column("severity", sa.Integer())
 
-        LOG.info("Downgrading 'reports' table structure...")
+        if has_any_reports:
+            LOG.info("Downgrading 'reports' table structure...")
+            if dialect == "sqlite":
+                LOG.warning("On SQLite databases, column changes require the "
+                            "creation of a new temporary table. If you have "
+                            "many reports, this might take a while...")
+
         if dialect == "sqlite":
-            LOG.warning("On SQLite databases, column changes require the "
-                        "creation of a new temporary table. If you have many "
-                        "reports, this might take a while...")
             op.execute("PRAGMA foreign_keys=OFF;")
 
         with op.batch_alter_table("reports",
@@ -336,7 +345,11 @@ def downgrade():
         if dialect == "sqlite":
             op.execute("PRAGMA foreign_keys=ON;")
 
-    def downgrade_reports(count, checkers_to_reports, checkers_to_severity):
+        if has_any_reports:
+            LOG.info("Done downgrading 'reports' table structure.")
+
+    def downgrade_reports(count: int,
+                          checkers_to_reports, checkers_to_severity):
         if count:
             LOG.info("Preparing to downgrade %d 'reports'...", count)
             done_report_count = 0
@@ -372,6 +385,6 @@ def downgrade():
     downgrade_analysis_info()
     report_count, checkers_to_reports, checkers_to_severity = \
         get_checkers_and_associated_reports()
-    downgrade_report_table_columns()
+    downgrade_report_table_columns(report_count > 0)
     downgrade_reports(report_count, checkers_to_reports, checkers_to_severity)
     drop_new_tables()

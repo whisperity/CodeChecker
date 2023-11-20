@@ -12,17 +12,19 @@ or dangling records from the database.
 from datetime import datetime, timedelta
 
 import sqlalchemy
-# from sqlalchemy.sql.expression import bindparam, union_all, select, cast
 
-# from codechecker_api.codeCheckerDBAccess_v6.ttypes import Severity
+from codechecker_api.codeCheckerDBAccess_v6.ttypes import Severity
 
 from codechecker_common import util
 from codechecker_common.logger import get_logger
 
 from .database import DBSession
-from .run_db_model import AnalysisInfo, BugPathEvent, BugReportPoint, \
-    Comment, File, FileContent, Report, ReportAnalysisInfo, \
-    RunHistoryAnalysisInfo, RunLock
+from .run_db_model import \
+    AnalysisInfo, \
+    BugPathEvent, BugReportPoint, \
+    Comment, Checker, \
+    File, FileContent, \
+    Report, ReportAnalysisInfo, RunHistoryAnalysisInfo, RunLock
 
 LOG = get_logger('server')
 RUN_LOCK_TIMEOUT_IN_DATABASE = 30 * 60  # 30 minutes.
@@ -46,8 +48,7 @@ def update_contextual_data(session_maker, context):
     Updates information in the database that comes from potentially changing
     contextual configuration of the server package.
     """
-    LOG.warning("Skipped updating severities -- NOT YET IMPLEMENTED.")
-    # _upgrade_severity_levels(session_maker, context.checker_labels)
+    upgrade_severity_levels(session_maker, context.checker_labels)
 
 
 def remove_expired_run_locks(session_maker):
@@ -177,71 +178,39 @@ def upgrade_severity_levels(session_maker, checker_labels):
     """
     Updates the potentially changed severities at the reports.
     """
-    raise NotImplementedError("TBD.")
-    # LOG.debug("Upgrading severity levels started...")
-    #
-    # severity_map = {}
-    # for checker in checker_labels.checkers():
-    #     severity_map[checker] = checker_labels.severity(checker)
-    #
-    # for severity_map_small in util.chunks(
-    #         iter(severity_map.items()), SQLITE_LIMIT_COMPOUND_SELECT):
-    #     severity_map_small = dict(severity_map_small)
-    #
-    #     with DBSession(session_maker) as session:
-    #         try:
-    #             # Create a sql query from the severity map.
-    #             severity_map_q = union_all(*[
-    #                 select([cast(bindparam('checker_id' + str(i),
-    #                                        str(checker_id))
-    #                         .label('checker_id'), sqlalchemy.String),
-    #                         cast(bindparam('severity' + str(i),
-    #                                        Severity._NAMES_TO_VALUES[
-    #                                        severity_map_small[checker_id]])
-    #                         .label('severity'), sqlalchemy.Integer)])
-    #                 for i, checker_id in enumerate(severity_map_small)]) \
-    #                 .alias('new_severities')
-    #
-    #             checker_ids = list(severity_map_small.keys())
-    #
-    #             # Get checkers which has been changed.
-    #             changed_checker_q = select(
-    #                 [Report.checker_id]) \
-    #                 .group_by(Report.checker_id) \
-    #                 .where(Report.checker_id.in_(checker_ids)) \
-    #                 .except_(session.query(severity_map_q)) \
-    #                 .alias('changed_severites')
-    #
-    #             changed_checkers = session.query(
-    #                 changed_checker_q.c.checker_id,
-    #                 changed_checker_q.c.severity)
-    #
-    #             # Update severity levels of checkers.
-    #             if changed_checkers:
-    #                 updated_checker_ids = set()
-    #                 for checker_id, severity_old in changed_checkers:
-    #                     severity_new = severity_map_small[checker_id]
-    #                     severity_id = \
-    #                       Severity._NAMES_TO_VALUES[severity_new]
-    #
-    #                     LOG.info("Upgrading severity level of '%s' checker "
-    #                              "from %s to %s",
-    #                              checker_id,
-    #                              Severity._VALUES_TO_NAMES[severity_old],
-    #                              severity_new)
-    #
-    #                     if checker_id in updated_checker_ids:
-    #                         continue
-    #
-    #                     session.query(Report) \
-    #                         .filter(Report.checker_id == checker_id) \
-    #                         .update({Report.severity: severity_id})
-    #
-    #                     updated_checker_ids.add(checker_id)
-    #
-    #                 session.commit()
-    #
-    #                 LOG.debug("Upgrading of severity levels finished...")
-    #         except (sqlalchemy.exc.OperationalError,
-    #                 sqlalchemy.exc.ProgrammingError) as ex:
-    #             LOG.error("Failed to upgrade severity levels: %s", str(ex))
+    LOG.debug("Upgrading severity levels started...")
+
+    with DBSession(session_maker) as session:
+        try:
+            for analyzer in sorted(checker_labels.get_analyzers()):
+                checkers_for_analyzer_in_database = session \
+                    .query(Checker.id,
+                           Checker.checker_name,
+                           Checker.severity) \
+                    .filter(Checker.analyzer_name == analyzer) \
+                    .all()
+                for checker_row in checkers_for_analyzer_in_database:
+                    checker: str = checker_row.checker_name
+                    old_severity: str = \
+                        Severity._VALUES_TO_NAMES[checker_row.severity]
+                    new_severity: str = \
+                        checker_labels.severity(checker, analyzer)
+                    if old_severity == new_severity:
+                        continue
+
+                    new_severity_db: int = \
+                        Severity._NAMES_TO_VALUES[new_severity]
+                    LOG.info("Upgrading the severity level of checker "
+                             "'%s/%s' from '%s' to '%s' (%d).",
+                             analyzer, checker, old_severity,
+                             new_severity, new_severity_db)
+                    session.query(Checker) \
+                        .filter(Checker.id == checker_row.id) \
+                        .update({Checker.severity: new_severity_db})
+
+                session.commit()
+        except (sqlalchemy.exc.OperationalError,
+                sqlalchemy.exc.ProgrammingError) as ex:
+            LOG.error("Failed to upgrade severity levels: %s", str(ex))
+
+    LOG.debug("Upgrading severity levels finished.")
