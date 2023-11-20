@@ -814,8 +814,7 @@ class MassStoreRun:
             analyzer_name, checker_name = \
                 getattr(report, "analyzer_name", "UNKNOWN"), \
                 getattr(report, "checker_name", "NOT FOUND")
-
-            checker_identifier_object = session.query(Checker) \
+            checker = session.query(Checker) \
                 .filter(sqlalchemy.and_(
                     Checker.analyzer_name == analyzer_name,
                     Checker.checker_name == checker_name)) \
@@ -823,8 +822,7 @@ class MassStoreRun:
 
             db_report = DBReport(
                 run_id, report.report_hash, file_path_to_id[report.file.path],
-                report.message, checker_identifier_object,
-                report.category, report.type, report.line, report.column,
+                report.message, checker, report.line, report.column,
                 review_status.status, review_status.author,
                 review_status.message, run_history_time,
                 review_status.in_source, detection_status, detection_time,

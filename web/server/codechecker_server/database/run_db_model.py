@@ -411,11 +411,6 @@ class Report(Base):
     checker = relationship(Checker, innerjoin=True, lazy="joined",
                            foreign_keys=[checker_id])
 
-    # FIXME: The executive decision is to annihilate this field! It's really NOT
-    # used anywhere...
-    checker_cat = Column(String)
-
-    bug_type = Column(String)
     line = Column(Integer)
     column = Column(Integer)
     path_length = Column(Integer)
@@ -462,8 +457,8 @@ class Report(Base):
 
     # Priority/severity etc...
     def __init__(self, run_id, bug_id, file_id, checker_message,
-                 checker: Checker, checker_cat, bug_type, line, column,
-                 review_status, review_status_author, review_status_message,
+                 checker: Checker,  line, column, review_status,
+                 review_status_author, review_status_message,
                  review_status_date, review_status_is_in_source,
                  detection_status, detection_date, path_length):
         self.run_id = run_id
@@ -471,8 +466,6 @@ class Report(Base):
         self.bug_id = bug_id
         self.checker_message = checker_message
         self.checker = checker
-        self.checker_cat = checker_cat
-        self.bug_type = bug_type
         self.review_status = review_status
         self.review_status_author = review_status_author
         self.review_status_message = review_status_message

@@ -196,6 +196,12 @@ def upgrade():
             ba.drop_column("analyzer_name")
             ba.drop_column("severity")
 
+            # These columns are dropped because they rarely contained any
+            # meaningful data with new informational value, and their contents
+            # were never actually exposed on the API.
+            ba.drop_column("checker_cat")
+            ba.drop_column("bug_type")
+
             ba.add_column(col_reports_checker_id, insert_after="bug_id")
 
         if dialect == "sqlite":
@@ -312,10 +318,12 @@ def downgrade():
         return count, checkers_to_reports, checkers_to_severity
 
     def downgrade_report_table_columns(has_any_reports: bool):
-        col_reports_checker_id = sa.Column("checker_id", sa.String())
         col_reports_analyzer_name = sa.Column("analyzer_name",
                                               sa.String(), nullable=False,
                                               server_default="unknown")
+        col_reports_checker_id = sa.Column("checker_id", sa.String())
+        col_reports_checker_cat = sa.Column("checker_cat", sa.String())
+        col_reports_bug_type = sa.Column("bug_type", sa.String())
         col_reports_severity = sa.Column("severity", sa.Integer())
 
         if has_any_reports:
@@ -340,7 +348,17 @@ def downgrade():
             # Restore the columns that were deleted in this revision.
             ba.add_column(col_reports_analyzer_name, insert_after="bug_id")
             ba.add_column(col_reports_checker_id, insert_after="analyzer_name")
-            ba.add_column(col_reports_severity, insert_after="checker_id")
+            ba.add_column(col_reports_checker_cat, insert_after="checker_id")
+            ba.add_column(col_reports_bug_type, insert_after="checker_cat")
+            ba.add_column(col_reports_severity, insert_after="bug_type")
+
+            LOG.debug("Restored type of columns 'reports.bug_type', "
+                      "'reports.checker_cat'. However, their contents can "
+                      "NOT be restored to the original values, as those were "
+                      "irrevocably lost during a previous schema upgrade. "
+                      "Note, that these columns NEVER contained any actual "
+                      "value that was accessible by users of the API, so "
+                      "this is a technical note.")
 
         if dialect == "sqlite":
             op.execute("PRAGMA foreign_keys=ON;")
