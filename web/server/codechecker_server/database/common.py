@@ -85,9 +85,6 @@ class ZLibCompressedString(TypeDecorator):
     Stores arbitrary user-defined strings ('str') as a ZLib-compressed
     binary datum.
     """
-
-    # Note that since SQLAlchemy 0.6, types.Binary is deprecated and
-    # automatically redirects to types.LargeBinary instead.
     impl = LargeBinary
     client_type = str
 

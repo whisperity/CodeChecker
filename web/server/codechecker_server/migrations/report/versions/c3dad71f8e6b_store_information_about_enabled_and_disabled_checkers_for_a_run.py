@@ -41,8 +41,8 @@ def upgrade():
         # new ZLibCompressed format.
         #
         # Note: The underlying type of ZLibCompressedString is still
-        # LargeBinary, so the Column itself need not be modified, only the
-        # contents.
+        # LargeBinary in this revision, so the Column type itself needs not be
+        # modified, only the content values need migration.
         Base = automap_base()
         Base.prepare(conn, reflect=True)
         # 'analysis_info' is the table!
@@ -254,8 +254,9 @@ def downgrade():
     db = Session(bind=conn)
 
     def downgrade_analysis_info():
-        # Downgrade AnalysisInfo to use raw BLOBs instead of the typed
-        # ZLibCompressedString feature.
+        # Downgrade AnalysisInfo to use raw BLOBs instead of the typed and
+        # tagged ZLibCompressedString feature. The actual type of the Column
+        # needs no modification, only the values.
         Base = automap_base()
         Base.prepare(conn, reflect=True)
 
