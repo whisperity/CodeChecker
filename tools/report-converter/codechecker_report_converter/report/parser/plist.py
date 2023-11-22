@@ -260,6 +260,7 @@ class Parser(BaseParser):
             severity=severity,
             report_hash=diag.get('issue_hash_content_of_line_in_context'),
             analyzer_name=analyzer_name,
+            category=diag.get('category'),
             source_line=None,
             bug_path_events=self.__get_bug_path_events(diag, files),
             bug_path_positions=self.__get_bug_path_positions(diag, files),
@@ -458,6 +459,7 @@ class Parser(BaseParser):
                 'issue_hash_content_of_line_in_context': report.report_hash,
                 'check_name': report.checker_name,
                 'description': report.message,
+                'category': report.category or 'unknown'
             }
 
             if report.analyzer_name:

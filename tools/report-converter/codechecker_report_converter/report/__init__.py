@@ -304,6 +304,8 @@ class Report:
         severity: Optional[str] = None,
         report_hash: Optional[str] = None,
         analyzer_name: Optional[str] = None,
+        category: Optional[str] = None,
+        type: Optional[str] = None,
         analyzer_result_file_path: Optional[str] = None,
         source_line: Optional[str] = None,
         bug_path_events: Optional[List[BugPathEvent]] = None,
@@ -335,6 +337,8 @@ class Report:
         self.severity = severity
         self.report_hash = report_hash
         self.analyzer_name = analyzer_name
+        self.category = category
+        self.type = type
         self.annotations = annotations
 
         self.static_message = \
@@ -483,6 +487,8 @@ class Report:
             "severity": self.severity,
             "report_hash": self.report_hash,
             "analyzer_name": self.analyzer_name,
+            "category": self.category,
+            "type": self.type,
             "review_status": self.review_status.status
             if self.review_status else '',
             "bug_path_events": [e.to_json() for e in self.bug_path_events],
