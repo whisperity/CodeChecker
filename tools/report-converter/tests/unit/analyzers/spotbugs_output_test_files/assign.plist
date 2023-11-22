@@ -5,8 +5,6 @@
 	<key>diagnostics</key>
 	<array>
 		<dict>
-			<key>category</key>
-			<string>unknown</string>
 			<key>check_name</key>
 			<string>DLS_DEAD_LOCAL_STORE</string>
 			<key>description</key>
@@ -123,12 +121,8 @@
 					<string>Dead store to $L1 in Assign.main(String[])</string>
 				</dict>
 			</array>
-			<key>type</key>
-			<string>spotbugs</string>
 		</dict>
 		<dict>
-			<key>category</key>
-			<string>unknown</string>
 			<key>check_name</key>
 			<string>DLS_DEAD_LOCAL_STORE</string>
 			<key>description</key>
@@ -245,12 +239,8 @@
 					<string>Dead store to $L1 in Assign.main(String[])</string>
 				</dict>
 			</array>
-			<key>type</key>
-			<string>spotbugs</string>
 		</dict>
 		<dict>
-			<key>category</key>
-			<string>unknown</string>
 			<key>check_name</key>
 			<string>NM_FIELD_NAMING_CONVENTION</string>
 			<key>description</key>
@@ -303,12 +293,8 @@
 					<string>The field name Assign.CapitalAttribute doesn't start with a lower case letter</string>
 				</dict>
 			</array>
-			<key>type</key>
-			<string>spotbugs</string>
 		</dict>
 		<dict>
-			<key>category</key>
-			<string>unknown</string>
 			<key>check_name</key>
 			<string>SA_LOCAL_DOUBLE_ASSIGNMENT</string>
 			<key>description</key>
@@ -425,12 +411,8 @@
 					<string>Double assignment of $L1 in Assign.main(String[])</string>
 				</dict>
 			</array>
-			<key>type</key>
-			<string>spotbugs</string>
 		</dict>
 		<dict>
-			<key>category</key>
-			<string>unknown</string>
 			<key>check_name</key>
 			<string>UC_USELESS_VOID_METHOD</string>
 			<key>description</key>
@@ -594,12 +576,8 @@
 					<string>Method Assign.main(String[]) seems to be useless</string>
 				</dict>
 			</array>
-			<key>type</key>
-			<string>spotbugs</string>
 		</dict>
 		<dict>
-			<key>category</key>
-			<string>unknown</string>
 			<key>check_name</key>
 			<string>UUF_UNUSED_FIELD</string>
 			<key>description</key>
@@ -652,8 +630,6 @@
 					<string>Unused field: Assign.CapitalAttribute</string>
 				</dict>
 			</array>
-			<key>type</key>
-			<string>spotbugs</string>
 		</dict>
 	</array>
 	<key>files</key>

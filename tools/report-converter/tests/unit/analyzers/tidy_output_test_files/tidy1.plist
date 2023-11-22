@@ -5,8 +5,6 @@
 	<key>diagnostics</key>
 	<array>
 		<dict>
-			<key>category</key>
-			<string>clang</string>
 			<key>check_name</key>
 			<string>clang-analyzer-core.DivideZero</string>
 			<key>description</key>
@@ -59,12 +57,8 @@
 					<string>Division by zero</string>
 				</dict>
 			</array>
-			<key>type</key>
-			<string>clang-tidy</string>
 		</dict>
 		<dict>
-			<key>category</key>
-			<string>clang</string>
 			<key>check_name</key>
 			<string>clang-diagnostic-division-by-zero</string>
 			<key>description</key>
@@ -100,8 +94,6 @@
 					<string>remainder by zero is undefined</string>
 				</dict>
 			</array>
-			<key>type</key>
-			<string>clang-tidy</string>
 		</dict>
 	</array>
 	<key>files</key>

@@ -1682,8 +1682,6 @@ for filtering reports in the CodeChecker GUI.
   &lt;key&gt;diagnostics&lt;/key&gt;
   &lt;array&gt;
     &lt;dict&gt;
-      &lt;key&gt;category&lt;/key&gt;
-      &lt;string&gt;unknown&lt;/string&gt;
       &lt;key&gt;check_name&lt;/key&gt;
       &lt;string&gt;UndefinedBehaviorSanitizer&lt;/string&gt;
       &lt;key&gt;description&lt;/key&gt;
@@ -1870,8 +1868,6 @@ similar to this one:
       "severity": "HIGH",
       "report_hash": "7d5ccfef806a23b016a52d0df8f1f5d8",
       "analyzer_name": "clangsa",
-      "category": "Logic error",
-      "type": null,
       "source_code_comments": [
         {
           "checkers": [ "core.DivideZero" ],
@@ -2019,10 +2015,6 @@ values are: `CRITICAL`, `HIGH`, `MEDIUM`, `LOW`, `STYLE`, `UNSPECIFIED`.
   (optional).
 - `analyzer_result_file_path` (str | null): analyzer result file path where
   the report comes from (optional).
-- `category` (str | null): report category such as 'Logic error',
-  'Code clone' etc. (optional)
-- `type` (str): report type such as 'Division by zero',
-  'Dereference of null pointer', etc. (optional).
 - `source_code_comments` (list): list of CodeChecker source code comments. For
   more information [see](#sourcecodecomment-object).
 - `review_status` (str): CodeChecker review status (default: 'unreviewed').

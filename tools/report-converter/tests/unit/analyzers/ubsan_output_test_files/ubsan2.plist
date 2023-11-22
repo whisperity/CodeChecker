@@ -5,8 +5,6 @@
 	<key>diagnostics</key>
 	<array>
 		<dict>
-			<key>category</key>
-			<string>unknown</string>
 			<key>check_name</key>
 			<string>UndefinedBehaviorSanitizer.enum</string>
 			<key>description</key>
@@ -42,12 +40,8 @@
 					<string>load of value 7, which is not a valid value for type 'enum E'</string>
 				</dict>
 			</array>
-			<key>type</key>
-			<string>ubsan</string>
 		</dict>
 		<dict>
-			<key>category</key>
-			<string>unknown</string>
 			<key>check_name</key>
 			<string>UndefinedBehaviorSanitizer.bool</string>
 			<key>description</key>
@@ -83,8 +77,6 @@
 					<string>load of value 2, which is not a valid value for type 'bool'</string>
 				</dict>
 			</array>
-			<key>type</key>
-			<string>ubsan</string>
 		</dict>
 	</array>
 	<key>files</key>

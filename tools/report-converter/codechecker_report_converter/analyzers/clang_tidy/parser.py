@@ -107,16 +107,10 @@ class Parser(BaseParser):
             for checker_name in checker_names:
                 r = deepcopy(report)
                 r.checker_name = checker_name
-                r.category = self._get_category(checker_name)
 
                 reports.append(r)
 
             return reports, line
-
-    def _get_category(self, checker_name: str) -> str:
-        """ Get category for Clang-Tidy checker. """
-        parts = checker_name.split('-')
-        return parts[0] if parts else 'unknown'
 
     def _parse_code(
         self,

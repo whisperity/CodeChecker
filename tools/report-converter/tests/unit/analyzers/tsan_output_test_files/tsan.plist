@@ -5,8 +5,6 @@
 	<key>diagnostics</key>
 	<array>
 		<dict>
-			<key>category</key>
-			<string>unknown</string>
 			<key>check_name</key>
 			<string>ThreadSanitizer</string>
 			<key>description</key>
@@ -192,8 +190,6 @@
 					<string>SEGV on unknown address 0x000000000000 (pc 0x0000004b525c bp 0x7fff93b54920 sp 0x7fff93b548b0 T23755)</string>
 				</dict>
 			</array>
-			<key>type</key>
-			<string>tsan</string>
 		</dict>
 	</array>
 	<key>files</key>

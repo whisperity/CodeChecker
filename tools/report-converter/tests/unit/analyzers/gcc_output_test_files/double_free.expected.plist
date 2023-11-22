@@ -5,8 +5,6 @@
 	<key>diagnostics</key>
 	<array>
 		<dict>
-			<key>category</key>
-			<string>unknown</string>
 			<key>check_name</key>
 			<string>-Wanalyzer-double-free</string>
 			<key>description</key>
@@ -233,8 +231,6 @@
 					</array>
 				</dict>
 			</array>
-			<key>type</key>
-			<string>gcc</string>
 		</dict>
 	</array>
 	<key>files</key>

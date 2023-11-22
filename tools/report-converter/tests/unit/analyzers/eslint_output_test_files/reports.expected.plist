@@ -5,8 +5,6 @@
 	<key>diagnostics</key>
 	<array>
 		<dict>
-			<key>category</key>
-			<string>unknown</string>
 			<key>check_name</key>
 			<string>no-unused-vars</string>
 			<key>description</key>
@@ -42,12 +40,8 @@
 					<string>'foo' is defined but never used.</string>
 				</dict>
 			</array>
-			<key>type</key>
-			<string>eslint</string>
 		</dict>
 		<dict>
-			<key>category</key>
-			<string>unknown</string>
 			<key>check_name</key>
 			<string>indent</string>
 			<key>description</key>
@@ -83,12 +77,8 @@
 					<string>Expected indentation of 4 spaces but found 2.</string>
 				</dict>
 			</array>
-			<key>type</key>
-			<string>eslint</string>
 		</dict>
 		<dict>
-			<key>category</key>
-			<string>unknown</string>
 			<key>check_name</key>
 			<string>indent</string>
 			<key>description</key>
@@ -124,12 +114,8 @@
 					<string>Expected indentation of 4 spaces but found 2.</string>
 				</dict>
 			</array>
-			<key>type</key>
-			<string>eslint</string>
 		</dict>
 		<dict>
-			<key>category</key>
-			<string>unknown</string>
 			<key>check_name</key>
 			<string>no-undef</string>
 			<key>description</key>
@@ -165,12 +151,8 @@
 					<string>'x' is not defined.</string>
 				</dict>
 			</array>
-			<key>type</key>
-			<string>eslint</string>
 		</dict>
 		<dict>
-			<key>category</key>
-			<string>unknown</string>
 			<key>check_name</key>
 			<string>no-unreachable</string>
 			<key>description</key>
@@ -206,8 +188,6 @@
 					<string>Unreachable code.</string>
 				</dict>
 			</array>
-			<key>type</key>
-			<string>eslint</string>
 		</dict>
 	</array>
 	<key>files</key>
