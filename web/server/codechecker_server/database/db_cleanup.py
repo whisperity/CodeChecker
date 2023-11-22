@@ -191,18 +191,21 @@ def upgrade_severity_levels(session_maker, checker_labels):
                     .all()
                 for checker_row in checkers_for_analyzer_in_database:
                     checker: str = checker_row.checker_name
+                    old_severity_db: int = checker_row.severity
                     old_severity: str = \
-                        Severity._VALUES_TO_NAMES[checker_row.severity]
+                        Severity._VALUES_TO_NAMES[old_severity_db]
                     new_severity: str = \
                         checker_labels.severity(checker, analyzer)
-                    if old_severity == new_severity:
-                        continue
-
                     new_severity_db: int = \
                         Severity._NAMES_TO_VALUES[new_severity]
+
+                    if old_severity_db == new_severity_db:
+                        continue
+
                     LOG.info("Upgrading the severity level of checker "
-                             "'%s/%s' from '%s' to '%s' (%d).",
-                             analyzer, checker, old_severity,
+                             "'%s/%s' from '%s' (%d) to '%s' (%d).",
+                             analyzer, checker,
+                             old_severity, old_severity_db,
                              new_severity, new_severity_db)
                     session.query(Checker) \
                         .filter(Checker.id == checker_row.id) \
