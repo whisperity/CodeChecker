@@ -5,6 +5,8 @@
 	<key>diagnostics</key>
 	<array>
 		<dict>
+			<key>category</key>
+			<string>unknown</string>
 			<key>check_name</key>
 			<string>CA1806</string>
 			<key>description</key>
@@ -40,8 +42,12 @@
 					<string>Do not ignore method results</string>
 				</dict>
 			</array>
+			<key>type</key>
+			<string>roslynator</string>
 		</dict>
 		<dict>
+			<key>category</key>
+			<string>unknown</string>
 			<key>check_name</key>
 			<string>CA1822</string>
 			<key>description</key>
@@ -77,6 +83,8 @@
 					<string>Mark members as static</string>
 				</dict>
 			</array>
+			<key>type</key>
+			<string>roslynator</string>
 		</dict>
 	</array>
 	<key>files</key>

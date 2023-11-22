@@ -5,6 +5,8 @@
 	<key>diagnostics</key>
 	<array>
 		<dict>
+			<key>category</key>
+			<string>modernize</string>
 			<key>check_name</key>
 			<string>modernize-use-nullptr</string>
 			<key>description</key>
@@ -56,6 +58,8 @@
 					<string>use nullptr</string>
 				</dict>
 			</array>
+			<key>type</key>
+			<string>clang-tidy</string>
 		</dict>
 	</array>
 	<key>files</key>

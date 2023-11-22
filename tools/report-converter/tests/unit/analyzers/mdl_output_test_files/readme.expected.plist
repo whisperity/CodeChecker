@@ -5,6 +5,8 @@
 	<key>diagnostics</key>
 	<array>
 		<dict>
+			<key>category</key>
+			<string>unknown</string>
 			<key>check_name</key>
 			<string>MD022</string>
 			<key>description</key>
@@ -40,8 +42,12 @@
 					<string>Headers should be surrounded by blank lines</string>
 				</dict>
 			</array>
+			<key>type</key>
+			<string>mdl</string>
 		</dict>
 		<dict>
+			<key>category</key>
+			<string>unknown</string>
 			<key>check_name</key>
 			<string>MD022</string>
 			<key>description</key>
@@ -77,8 +83,12 @@
 					<string>Headers should be surrounded by blank lines</string>
 				</dict>
 			</array>
+			<key>type</key>
+			<string>mdl</string>
 		</dict>
 		<dict>
+			<key>category</key>
+			<string>unknown</string>
 			<key>check_name</key>
 			<string>MD025</string>
 			<key>description</key>
@@ -114,6 +124,8 @@
 					<string>Multiple top level headers in the same document</string>
 				</dict>
 			</array>
+			<key>type</key>
+			<string>mdl</string>
 		</dict>
 	</array>
 	<key>files</key>

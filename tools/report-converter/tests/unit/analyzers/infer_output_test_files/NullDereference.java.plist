@@ -5,6 +5,8 @@
 	<key>diagnostics</key>
 	<array>
 		<dict>
+			<key>category</key>
+			<string>unknown</string>
 			<key>check_name</key>
 			<string>NULL_DEREFERENCE</string>
 			<key>description</key>
@@ -313,6 +315,8 @@
 					<string>object `i` last assigned on line 7 could be null and is dereferenced at line 8.</string>
 				</dict>
 			</array>
+			<key>type</key>
+			<string>fbinfer</string>
 		</dict>
 	</array>
 	<key>files</key>

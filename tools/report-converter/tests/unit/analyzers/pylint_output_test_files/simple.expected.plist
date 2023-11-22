@@ -5,6 +5,8 @@
 	<key>diagnostics</key>
 	<array>
 		<dict>
+			<key>category</key>
+			<string>unknown</string>
 			<key>check_name</key>
 			<string>missing-module-docstring</string>
 			<key>description</key>
@@ -40,8 +42,12 @@
 					<string>Missing module docstring</string>
 				</dict>
 			</array>
+			<key>type</key>
+			<string>pylint</string>
 		</dict>
 		<dict>
+			<key>category</key>
+			<string>unknown</string>
 			<key>check_name</key>
 			<string>blacklisted-name</string>
 			<key>description</key>
@@ -77,8 +83,12 @@
 					<string>Black listed name "foo"</string>
 				</dict>
 			</array>
+			<key>type</key>
+			<string>pylint</string>
 		</dict>
 		<dict>
+			<key>category</key>
+			<string>unknown</string>
 			<key>check_name</key>
 			<string>invalid-name</string>
 			<key>description</key>
@@ -114,8 +124,12 @@
 					<string>Argument name "x" doesn't conform to snake_case naming style</string>
 				</dict>
 			</array>
+			<key>type</key>
+			<string>pylint</string>
 		</dict>
 		<dict>
+			<key>category</key>
+			<string>unknown</string>
 			<key>check_name</key>
 			<string>missing-function-docstring</string>
 			<key>description</key>
@@ -151,8 +165,12 @@
 					<string>Missing function or method docstring</string>
 				</dict>
 			</array>
+			<key>type</key>
+			<string>pylint</string>
 		</dict>
 		<dict>
+			<key>category</key>
+			<string>unknown</string>
 			<key>check_name</key>
 			<string>unused-argument</string>
 			<key>description</key>
@@ -188,8 +206,12 @@
 					<string>Unused argument 'x'</string>
 				</dict>
 			</array>
+			<key>type</key>
+			<string>pylint</string>
 		</dict>
 		<dict>
+			<key>category</key>
+			<string>unknown</string>
 			<key>check_name</key>
 			<string>unused-import</string>
 			<key>description</key>
@@ -225,6 +247,8 @@
 					<string>Unused import json</string>
 				</dict>
 			</array>
+			<key>type</key>
+			<string>pylint</string>
 		</dict>
 	</array>
 	<key>files</key>

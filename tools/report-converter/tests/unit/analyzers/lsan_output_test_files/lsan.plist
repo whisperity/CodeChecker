@@ -5,6 +5,8 @@
 	<key>diagnostics</key>
 	<array>
 		<dict>
+			<key>category</key>
+			<string>unknown</string>
 			<key>check_name</key>
 			<string>LeakSanitizer</string>
 			<key>description</key>
@@ -78,6 +80,8 @@ SUMMARY: AddressSanitizer: 7 byte(s) leaked in 1 allocation(s)
 					<string>Direct leak of 7 byte(s) in 1 object(s) allocated from:</string>
 				</dict>
 			</array>
+			<key>type</key>
+			<string>lsan</string>
 		</dict>
 	</array>
 	<key>files</key>

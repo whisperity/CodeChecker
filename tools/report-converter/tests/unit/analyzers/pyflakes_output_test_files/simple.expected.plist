@@ -5,6 +5,8 @@
 	<key>diagnostics</key>
 	<array>
 		<dict>
+			<key>category</key>
+			<string>unknown</string>
 			<key>check_name</key>
 			<string>pyflakes</string>
 			<key>description</key>
@@ -40,8 +42,12 @@
 					<string>'collections.namedtuple' imported but unused</string>
 				</dict>
 			</array>
+			<key>type</key>
+			<string>pyflakes</string>
 		</dict>
 		<dict>
+			<key>category</key>
+			<string>unknown</string>
 			<key>check_name</key>
 			<string>pyflakes</string>
 			<key>description</key>
@@ -77,8 +83,12 @@
 					<string>undefined name 'self'</string>
 				</dict>
 			</array>
+			<key>type</key>
+			<string>pyflakes</string>
 		</dict>
 		<dict>
+			<key>category</key>
+			<string>unknown</string>
 			<key>check_name</key>
 			<string>pyflakes</string>
 			<key>description</key>
@@ -114,6 +124,8 @@
 					<string>local variable 'name' is assigned to but never used</string>
 				</dict>
 			</array>
+			<key>type</key>
+			<string>pyflakes</string>
 		</dict>
 	</array>
 	<key>files</key>

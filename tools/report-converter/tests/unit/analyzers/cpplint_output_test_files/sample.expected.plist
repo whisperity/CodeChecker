@@ -5,6 +5,8 @@
 	<key>diagnostics</key>
 	<array>
 		<dict>
+			<key>category</key>
+			<string>unknown</string>
 			<key>check_name</key>
 			<string>legal/copyright</string>
 			<key>description</key>
@@ -40,8 +42,12 @@
 					<string>No copyright message found.  You should have a line: "Copyright [year] &lt;Copyright Owner&gt;"</string>
 				</dict>
 			</array>
+			<key>type</key>
+			<string>cpplint</string>
 		</dict>
 		<dict>
+			<key>category</key>
+			<string>unknown</string>
 			<key>check_name</key>
 			<string>whitespace/blank_line</string>
 			<key>description</key>
@@ -77,8 +83,12 @@
 					<string>Redundant blank line at the start of a code block should be deleted.</string>
 				</dict>
 			</array>
+			<key>type</key>
+			<string>cpplint</string>
 		</dict>
 		<dict>
+			<key>category</key>
+			<string>unknown</string>
 			<key>check_name</key>
 			<string>whitespace/blank_line</string>
 			<key>description</key>
@@ -114,6 +124,8 @@
 					<string>Redundant blank line at the end of a code block should be deleted.</string>
 				</dict>
 			</array>
+			<key>type</key>
+			<string>cpplint</string>
 		</dict>
 	</array>
 	<key>files</key>

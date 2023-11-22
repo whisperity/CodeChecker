@@ -68,5 +68,4 @@ class ASANAnalyzerResultTestCase(unittest.TestCase):
             self.assertTrue(res['metadata']['generated_by']['version'])
             res['metadata']['generated_by']['version'] = "x.y.z"
 
-        self.maxDiff = None
         self.assertEqual(res, exp)

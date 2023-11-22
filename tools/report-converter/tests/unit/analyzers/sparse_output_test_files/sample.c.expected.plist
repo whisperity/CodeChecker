@@ -5,6 +5,8 @@
 	<key>diagnostics</key>
 	<array>
 		<dict>
+			<key>category</key>
+			<string>unknown</string>
 			<key>check_name</key>
 			<string>sparse</string>
 			<key>description</key>
@@ -40,6 +42,8 @@
 					<string>warning: symbol 'machine_id' was not declared. Should it be static?</string>
 				</dict>
 			</array>
+			<key>type</key>
+			<string>sparse</string>
 		</dict>
 	</array>
 	<key>files</key>

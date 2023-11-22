@@ -5,6 +5,8 @@
 	<key>diagnostics</key>
 	<array>
 		<dict>
+			<key>category</key>
+			<string>unknown</string>
 			<key>check_name</key>
 			<string>sphinx</string>
 			<key>description</key>
@@ -40,6 +42,8 @@
 					<string>WARNING: Title underline too short.</string>
 				</dict>
 			</array>
+			<key>type</key>
+			<string>sphinx</string>
 		</dict>
 	</array>
 	<key>files</key>

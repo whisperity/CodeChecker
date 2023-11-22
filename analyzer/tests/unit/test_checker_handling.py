@@ -523,10 +523,7 @@ class CheckerHandlingCppcheckTest(unittest.TestCase):
             args = Namespace()
             args.cppcheck_args_cfg_file = cppcheckargs
 
-            try:
-                analyzer = create_analyzer_cppcheck(args, tmp_ws)
-            except TypeError:
-                raise unittest.SkipTest("CppCheck analyzer is not available")
+            analyzer = create_analyzer_cppcheck(args, tmp_ws)
             result_handler = create_result_handler(analyzer)
             cmd = analyzer.construct_analyzer_cmd(result_handler)
 

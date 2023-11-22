@@ -5,6 +5,8 @@
 	<key>diagnostics</key>
 	<array>
 		<dict>
+			<key>category</key>
+			<string>unknown</string>
 			<key>check_name</key>
 			<string>AddressSanitizer</string>
 			<key>description</key>
@@ -77,6 +79,8 @@
 					<string>heap-use-after-free on address 0x614000000044 at pc 0x0000004f4b45 bp 0x7ffd40559120 sp 0x7ffd40559118</string>
 				</dict>
 			</array>
+			<key>type</key>
+			<string>asan</string>
 		</dict>
 	</array>
 	<key>files</key>

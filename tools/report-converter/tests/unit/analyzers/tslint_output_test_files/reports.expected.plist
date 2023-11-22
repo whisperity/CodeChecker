@@ -5,6 +5,8 @@
 	<key>diagnostics</key>
 	<array>
 		<dict>
+			<key>category</key>
+			<string>unknown</string>
 			<key>check_name</key>
 			<string>no-conditional-assignment</string>
 			<key>description</key>
@@ -40,8 +42,12 @@
 					<string>Assignments in conditional expressions are forbidden</string>
 				</dict>
 			</array>
+			<key>type</key>
+			<string>tslint</string>
 		</dict>
 		<dict>
+			<key>category</key>
+			<string>unknown</string>
 			<key>check_name</key>
 			<string>no-var-keyword</string>
 			<key>description</key>
@@ -77,6 +83,8 @@
 					<string>Forbidden 'var' keyword, use 'let' or 'const' instead</string>
 				</dict>
 			</array>
+			<key>type</key>
+			<string>tslint</string>
 		</dict>
 	</array>
 	<key>files</key>

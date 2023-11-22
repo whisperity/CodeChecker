@@ -49,6 +49,8 @@ SRC_FILES = [
 div_zero_skel = Report(
     SRC_FILES[1], 7, 14, 'Division by zero', 'core.DivideZero',
     report_hash='79e31a6ba028f0b7d9779faf4a6cb9cf',
+    category='Logic error',
+    type='Division by zero',
     bug_path_events=[
         BugPathEvent(
             "'base' initialized to 0",
@@ -110,6 +112,8 @@ stack_addr_skel = Report(
     stack_addr_skel_msg,
     'core.StackAddressEscape',
     report_hash='f7b5072d428e890f2d309217f3ead16f',
+    category='Logic error',
+    type='Stack address stored into global variable',
     bug_path_events=[
         BugPathEvent(
             stack_addr_skel_msg, SRC_FILES[0], 16, 1, Range(14, 3, 14, 29))

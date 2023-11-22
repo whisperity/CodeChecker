@@ -5,6 +5,8 @@
 	<key>diagnostics</key>
 	<array>
 		<dict>
+			<key>category</key>
+			<string>unknown</string>
 			<key>check_name</key>
 			<string>golint</string>
 			<key>description</key>
@@ -40,8 +42,12 @@
 					<string>exported type T should have comment or be unexported</string>
 				</dict>
 			</array>
+			<key>type</key>
+			<string>golint</string>
 		</dict>
 		<dict>
+			<key>category</key>
+			<string>unknown</string>
 			<key>check_name</key>
 			<string>golint</string>
 			<key>description</key>
@@ -77,6 +83,8 @@
 					<string>exported var Z should have its own declaration</string>
 				</dict>
 			</array>
+			<key>type</key>
+			<string>golint</string>
 		</dict>
 	</array>
 	<key>files</key>

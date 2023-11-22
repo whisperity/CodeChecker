@@ -5,6 +5,8 @@
 	<key>diagnostics</key>
 	<array>
 		<dict>
+			<key>category</key>
+			<string>error</string>
 			<key>check_name</key>
 			<string>zerodiv</string>
 			<key>description</key>
@@ -99,6 +101,8 @@
 					</array>
 				</dict>
 			</array>
+			<key>type</key>
+			<string>cppcheck</string>
 		</dict>
 	</array>
 	<key>files</key>
