@@ -11,6 +11,7 @@ SQLAlchemy ORM model for the analysis run storage database.
 from datetime import datetime, timedelta
 from math import ceil
 import os
+from typing import Optional
 
 from sqlalchemy import Boolean, Column, DateTime, Enum, ForeignKey, Integer, \
     LargeBinary, MetaData, String, UniqueConstraint, Table, Text
@@ -455,27 +456,38 @@ class Report(Base):
 
     annotations = relationship("ReportAnnotations")
 
-    # Priority/severity etc...
-    def __init__(self, run_id, bug_id, file_id, checker_message,
-                 checker: Checker,  line, column, review_status,
-                 review_status_author, review_status_message,
-                 review_status_date, review_status_is_in_source,
-                 detection_status, detection_date, path_length):
-        self.run_id = run_id
+    def __init__(self,
+                 file_id: int,
+                 run_id: int,
+                 bug_id: Optional[str],
+                 checker: Checker,
+                 line: int,
+                 column: int,
+                 path_length: int,
+                 checker_message: str,
+                 detection_status,
+                 review_status,
+                 review_status_author: Optional[str],
+                 review_status_message: Optional[bytes],
+                 review_status_date: Optional[datetime],
+                 review_status_is_in_source: bool, detection_date: datetime,
+                 fixed_date: Optional[datetime]):
         self.file_id = file_id
+        self.run_id = run_id
         self.bug_id = bug_id
-        self.checker_message = checker_message
         self.checker = checker
+        self.line = line
+        self.column = column
+        self.path_length = path_length
+        self.checker_message = checker_message
+        self.detection_status = detection_status
         self.review_status = review_status
         self.review_status_author = review_status_author
         self.review_status_message = review_status_message
         self.review_status_date = review_status_date
         self.review_status_is_in_source = review_status_is_in_source
-        self.detection_status = detection_status
-        self.line = line
-        self.column = column
         self.detected_at = detection_date
-        self.path_length = path_length
+        self.fixed_at = fixed_date
 
 
 class ReportAnnotations(Base):

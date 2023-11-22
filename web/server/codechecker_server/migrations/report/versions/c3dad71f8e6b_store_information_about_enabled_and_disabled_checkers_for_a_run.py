@@ -109,6 +109,9 @@ def upgrade():
         Report = Base.classes.reports  # 'reports' is the table name!
         Checker = Base.classes.checkers
 
+        db.add(Checker(analyzer_name="__FAKE__",
+                       checker_name="__FAKE__",
+                       severity=0))
         db.add(Checker(analyzer_name="UNKNOWN",
                        checker_name="NOT FOUND",
                        severity=0))
