@@ -395,7 +395,6 @@ def downgrade():
                          (done_report_count * 100.0 / count))
             db.commit()
             LOG.info("Done inserting 'checkers' back into 'reports'.")
-        pass
 
     def drop_new_tables():
         # Drop all tables and columns that were created in this revision.
