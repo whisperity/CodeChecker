@@ -86,10 +86,15 @@ class _RunLock:
         LOG.debug("Acquired exclusive lock for run '%s' that was originally "
                   "locked at '%s'.",
                   self.__run_name, self.__run_lock.locked_at)
+        return self
 
     def __exit__(self, *args):
         self.__run_lock = None
         self.__session = None
+
+    def noop(self):
+        """Does nothing, but prevents Pylint from complaining."""
+        return None
 
 
 def unzip(b64zip: str, output_dir: str) -> int:
@@ -1447,6 +1452,7 @@ class MassStoreRun:
                                 file_path_to_id, run_history_time)
 
                         session.commit()
+                        _lock.noop()
 
                     if self.__reports_with_fake_checkers:
                         with LogTask(run_name=self.__name,
@@ -1472,6 +1478,7 @@ class MassStoreRun:
                         self.finish_checker_run(session, run_id)
 
                         session.commit()
+                        _lock.noop()
 
                     # If it's a run update, do not increment the number
                     # of runs of the current product.
