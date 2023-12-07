@@ -43,6 +43,20 @@ metadata_cc_info = {
             'bugprone-use-after-move': True,
             'abseil-string-find-startswith': False
         }
+    },
+    "analyzers": [
+        "clang-tidy",
+        "clangsa"
+    ],
+    "checker_names_per_analyzer": {
+        "clangsa": [
+            "alpha.clone.CloneChecker",
+            "deadcode.DeadStores"
+        ],
+        "clang-tidy": [
+            "abseil-string-find-startswith",
+            "bugprone-use-after-move"
+        ]
     }
 }
 
@@ -73,6 +87,10 @@ metadata_multiple_info = {
             "version": "Cppcheck 1.87"
         }
     },
+    "analyzers": [
+        "clang-tidy",
+        "clangsa"
+    ],
     'checkers': {
         'clangsa': {
             'alpha.clone.CloneChecker': False,
@@ -135,7 +153,32 @@ class MetadataInfoParserTest(unittest.TestCase):
         self.assertDictEqual(metadata_cc_info['analyzer_statistics'],
                              mip.analyzer_statistics)
 
-        self.assertDictEqual(metadata_cc_info['checkers'],
+        self.assertListEqual(metadata_cc_info["analyzers"],
+                             mip.analyzers)
+
+        # v1 metadata could not store the information that a checker was
+        # disabled, only the list of enabled checkers were added to the format.
+        # See web/tests/functional/report_viewer_api/test_files/metadata.json.
+        self.assertDictEqual(metadata_cc_info["checker_names_per_analyzer"],
+                             mip.checkers)
+
+        self.assertListEqual(metadata_cc_info
+                             ["checker_names_per_analyzer"]["clangsa"],
+                             list(mip.get_checker_names("clangsa")))
+        self.assertListEqual(metadata_cc_info
+                             ["checker_names_per_analyzer"]["clang-tidy"],
+                             list(mip.get_checker_names("clang-tidy")))
+
+    def test_metadata_info_v1_point_5(self):
+        """
+        Get metadata info for old version format json file, but the kind where
+        checker "enabled status" was already represented, but before it
+        officially became the version 2 format.
+        """
+        metadata_v1_5 = os.path.join(self.__metadata_test_files, "v1.5.json")
+        mip = MetadataInfoParser(metadata_v1_5)
+
+        self.assertDictEqual(metadata_cc_info["checkers"],
                              mip.checkers)
 
     def test_metadata_info_v2(self):
@@ -155,8 +198,19 @@ class MetadataInfoParserTest(unittest.TestCase):
         self.assertDictEqual(metadata_cc_info['analyzer_statistics'],
                              mip.analyzer_statistics)
 
-        self.assertDictEqual(metadata_cc_info['checkers'],
+        self.assertListEqual(metadata_cc_info["analyzers"],
+                             mip.analyzers)
+
+
+        self.assertDictEqual(metadata_cc_info["checkers"],
                              mip.checkers)
+
+        self.assertListEqual(metadata_cc_info
+                             ["checker_names_per_analyzer"]["clangsa"],
+                             list(mip.get_checker_names("clangsa")))
+        self.assertListEqual(metadata_cc_info
+                             ["checker_names_per_analyzer"]["clang-tidy"],
+                             list(mip.get_checker_names("clang-tidy")))
 
     def test_multiple_metadata_info(self):
         """ Get metadata info from multiple analyzers. """

@@ -724,9 +724,7 @@ class MassStoreRun:
                     session.flush()
                     session.refresh(analysis_info, ["id"])
 
-                    for analyzer, checker_data \
-                            in cast(Dict[str, Dict[str, bool]],
-                                    mip.checkers).items():
+                    for analyzer in mip.analyzers:
                         db_checkers = session \
                             .query(Checker) \
                             .filter(Checker.analyzer_name == analyzer) \
@@ -734,8 +732,10 @@ class MassStoreRun:
                         db_checkers = {r.checker_name: r for r in db_checkers}
 
                         connection_rows = [AnalysisInfoChecker(
-                            analysis_info, db_checkers[name], is_enabled)
-                            for name, is_enabled in checker_data.items()]
+                            analysis_info, db_checkers[checker_name],
+                            checker_name in mip.enabled_checkers)
+                            for checker_name
+                            in mip.get_checker_names(analyzer)]
                         for r in connection_rows:
                             session.add(r)
 
@@ -1335,10 +1335,11 @@ class MassStoreRun:
                 reports_to_delete.update([x.id for x in reports])
             else:
                 for report in reports:
-                    checker = report.checker_id
-                    if checker in disabled_checkers:
+                    checker_name: str = report.checker.checker_name
+                    if checker_name in disabled_checkers:
                         report.detection_status = 'off'
-                    elif checker_is_unavailable(checker, enabled_checkers):
+                    elif checker_is_unavailable(checker_name,
+                                                enabled_checkers):
                         report.detection_status = 'unavailable'
                     else:
                         report.detection_status = 'resolved'
@@ -1430,10 +1431,9 @@ class MassStoreRun:
                     checkers_in_metadata = {
                         (analyzer, checker)
                         for metadata in self.__mips.values()
-                        for analyzer in metadata.checkers.keys()
+                        for analyzer in metadata.analyzers
                         for checker
-                        in cast(Dict[str, Dict[str, bool]],
-                                metadata.checkers)[analyzer].keys()}
+                        in metadata.get_checker_names(analyzer)}
                     self.__store_checker_identifiers(checkers_in_metadata)
 
                 try:
