@@ -5,7 +5,8 @@
 #  SPDX-License-Identifier: Apache-2.0 WITH LLVM-exception
 #
 # -------------------------------------------------------------------------
-from typing import Tuple, cast
+from functools import wraps
+from typing import Tuple, Union, cast
 import zlib
 
 from codechecker_server.database.common import decode_zlib, encode_zlib
@@ -98,3 +99,131 @@ def recompress_zlib_as_tagged_exact_ratio(
             break
 
     return level_to_use, encode_zlib(data, kind, level_to_use)
+
+
+class AlterContext:
+    """
+    Executes ALTER TABLE operations in an appropriate context, by batching
+    operations when neccessary.
+    """
+
+    def __init__(self, op, table_name: str, recreate: str = "auto",
+                 force_batch = False,
+                 disable_foreign_keys_during_operation = False):
+        self.op = op
+        self.table_name = table_name
+        self.recreate = recreate
+        self.force_batch = force_batch
+        self.disable_foreign_keys = disable_foreign_keys_during_operation
+
+        self.dialect = op.get_context().dialect.name
+        self.batcher = None
+
+    def _foreign_keys_off(self):
+        if self.dialect == "sqlite":
+            self.op.execute("PRAGMA foreign_keys=OFF;")
+
+    def _foreign_keys_on(self):
+        if self.dialect == "sqlite":
+            self.op.execute("PRAGMA foreign_keys=ON;")
+
+    def __enter__(self):
+        if self.disable_foreign_keys:
+            self._foreign_keys_off()
+
+        if self.force_batch or self.dialect == "sqlite":
+            self.batcher = self.op.batch_alter_table(self.table_name,
+                                                     recreate=self.recreate) \
+                .__enter__()
+            return self
+        elif self.dialect == "postgresql":
+            # Usually, there is no need for batch operations for PostgreSQL.
+            return self
+
+    def __exit__(self, *exc):
+        if self.disable_foreign_keys:
+            self._foreign_keys_on()
+
+        if self.batcher:
+            self.batcher.__exit__(*exc)
+
+    @staticmethod
+    def __wraps_alembic(needs_table_name = True,
+                        needs_table_name_in_batch_mode = False,
+                        table_name_as_kwarg: Union[bool, str] = False):
+        """
+        Decorates a member function to forward operation onto an Alembic
+        table alteration function, in batch mode or normal mode, depending on
+        the context's state.
+        """
+        def _do_wrap(function):
+            function_name = function.__name__
+
+            @wraps(function)
+            def _wrapper(self, *args, **kwargs):
+                if self.batcher:
+                    actual_function = getattr(self.batcher, function_name)
+                    pass_table_name = needs_table_name and \
+                        needs_table_name_in_batch_mode
+                else:
+                    actual_function = getattr(self.op, function_name)
+                    pass_table_name = needs_table_name
+
+                actual_args = list(args)
+                actual_kwargs = dict(kwargs)
+                if pass_table_name:
+                    if not table_name_as_kwarg:
+                        actual_args = [self.table_name] + actual_args
+                    else:
+                        actual_kwargs[
+                            "table_name" if table_name_as_kwarg is True
+                            else table_name_as_kwarg] = self.table_name
+
+                return actual_function(*actual_args, **actual_kwargs)
+            return _wrapper
+        return _do_wrap
+
+    @staticmethod
+    def __unsupported_nonbatch_kwargs(*arg_names):
+        """
+        Removes the named arguments in 'arg_names' from the kwargs of the call
+        if the function is called in batch mode.
+        """
+        def _do_wrap(function):
+            @wraps(function)
+            def _wrapper(self, *args, **kwargs):
+                actual_kwargs = {k: v for k, v in dict(kwargs).items()
+                                 if k not in arg_names}
+                return function(self, *args, **actual_kwargs)
+            return _wrapper
+        return _do_wrap
+
+    @__unsupported_nonbatch_kwargs("insert_before", "insert_after")
+    @__wraps_alembic()
+    def add_column(self, *args, **kwargs):
+        pass
+
+    @__unsupported_nonbatch_kwargs("insert_before", "insert_after")
+    @__wraps_alembic()
+    def alter_column(self, *args, **kwargs):
+        pass
+
+    @__wraps_alembic()
+    def drop_column(self, *args, **kwargs):
+        pass
+
+    @__wraps_alembic(table_name_as_kwarg=True)
+    def create_index(self, *args, **kwargs):
+        pass
+
+    @__wraps_alembic(table_name_as_kwarg=True)
+    def drop_index(self, *args, **kwargs):
+        pass
+
+    @__wraps_alembic(table_name_as_kwarg="source_table")
+    def create_foreign_key(self, *args, **kwargs):
+        pass
+
+    @__wraps_alembic(table_name_as_kwarg=True)
+    def drop_constraint(self, *args, **kwargs):
+        pass

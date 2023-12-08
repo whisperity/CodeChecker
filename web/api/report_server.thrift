@@ -468,10 +468,16 @@ union AnalysisInfoFilter {
   3: i64 reportId,
 }
 
+struct AnalysisInfoCheckers {
+  1: optional bool Enabled,  // If the checker was enabled during the analysis.
+}
+
 struct AnalysisInfo {
   1: string                             analyzerCommand,
-  // For each analyzer, the list of all checkers that executed in the analysis.
-  2: optional map<string, list<string>> enabledCheckers,
+  // For each analyzer, the checkers and their status as was available during
+  // the analysis.
+  2: optional map<string, map<string,
+        AnalysisInfoCheckers>>          checkers,
 }
 
 typedef string CommitHash

@@ -23,6 +23,7 @@ from sqlalchemy.ext.automap import automap_base
 
 from codechecker_common.util import progress
 from codechecker_server.migrations.report.common import \
+    AlterContext, \
     recompress_zlib_as_untagged, recompress_zlib_as_tagged_exact_ratio
 
 
@@ -187,28 +188,22 @@ def upgrade():
                             "creation of a new temporary table. If you have "
                             "many reports, this might take a while...")
 
-        if dialect == "sqlite":
-            op.execute("PRAGMA foreign_keys=OFF;")
+        with AlterContext(op, "reports",
+                          recreate="always" if dialect == "sqlite" else "auto",
+                          disable_foreign_keys_during_operation=True) as ac:
+                ac.drop_column("checker_id")
+                # These columns are deleted as this data is now available
+                # through the 'checkers' lookup-table.
+                ac.drop_column("analyzer_name")
+                ac.drop_column("severity")
 
-        with op.batch_alter_table("reports",
-                                  recreate="always" if dialect == "sqlite"
-                                           else "auto") as ba:
-            ba.drop_column("checker_id")
-            # These columns are deleted as this data is now available through
-            # the 'checkers' lookup-table.
-            ba.drop_column("analyzer_name")
-            ba.drop_column("severity")
+                # These columns are dropped because they rarely contained any
+                # meaningful data with new informational value, and their
+                # contents were never actually exposed on the API.
+                ac.drop_column("checker_cat")
+                ac.drop_column("bug_type")
 
-            # These columns are dropped because they rarely contained any
-            # meaningful data with new informational value, and their contents
-            # were never actually exposed on the API.
-            ba.drop_column("checker_cat")
-            ba.drop_column("bug_type")
-
-            ba.add_column(col_reports_checker_id, insert_after="bug_id")
-
-        if dialect == "sqlite":
-            op.execute("PRAGMA foreign_keys=ON;")
+                ac.add_column(col_reports_checker_id, insert_after="bug_id")
 
         if has_any_reports:
             LOG.info("Done upgrading 'reports' table structure.")
@@ -227,19 +222,15 @@ def upgrade():
             "deferrable": False,
             "ondelete": "RESTRICT"
         }
-        if dialect == "sqlite":
-            op.execute("PRAGMA foreign_keys=OFF;")
 
-        with op.batch_alter_table("reports") as ba:
+        with AlterContext(op, "reports",
+                          disable_foreign_keys_during_operation=True) as ac:
             # Now that the values are filled, ensure that the constriants are
             # appropriately enforced.
-            ba.create_index(**ix_reports_checker_id)
-            ba.create_foreign_key(**fk_reports_checker_id)
+            ac.create_index(**ix_reports_checker_id)
+            ac.create_foreign_key(**fk_reports_checker_id)
 
-            ba.alter_column("checker_id", nullable=False)
-
-        if dialect == "sqlite":
-            op.execute("PRAGMA foreign_keys=ON;")
+            ac.alter_column("checker_id", nullable=False)
 
     upgrade_analysis_info()
     create_new_tables()
@@ -337,24 +328,21 @@ def downgrade():
                             "creation of a new temporary table. If you have "
                             "many reports, this might take a while...")
 
-        if dialect == "sqlite":
-            op.execute("PRAGMA foreign_keys=OFF;")
-
-        with op.batch_alter_table("reports",
-                                  recreate="always" if dialect == "sqlite"
-                                           else "auto") as ba:
+        with AlterContext(op, "reports",
+                          recreate="always" if dialect == "sqlite" else "auto",
+                          disable_foreign_keys_during_operation=True) as ac:
             # Drop the column that was introduced in this revision.
-            ba.drop_constraint(
+            ac.drop_constraint(
                 op.f("fk_reports_checker_id_checkers"))
-            ba.drop_index(op.f("ix_reports_checker_id"))
-            ba.drop_column("checker_id")
+            ac.drop_index(op.f("ix_reports_checker_id"))
+            ac.drop_column("checker_id")
 
             # Restore the columns that were deleted in this revision.
-            ba.add_column(col_reports_analyzer_name, insert_after="bug_id")
-            ba.add_column(col_reports_checker_id, insert_after="analyzer_name")
-            ba.add_column(col_reports_checker_cat, insert_after="checker_id")
-            ba.add_column(col_reports_bug_type, insert_after="checker_cat")
-            ba.add_column(col_reports_severity, insert_after="bug_type")
+            ac.add_column(col_reports_analyzer_name, insert_after="bug_id")
+            ac.add_column(col_reports_checker_id, insert_after="analyzer_name")
+            ac.add_column(col_reports_checker_cat, insert_after="checker_id")
+            ac.add_column(col_reports_bug_type, insert_after="checker_cat")
+            ac.add_column(col_reports_severity, insert_after="bug_type")
 
             LOG.debug("Restored type of columns 'reports.bug_type', "
                       "'reports.checker_cat'. However, their contents can "
@@ -363,9 +351,6 @@ def downgrade():
                       "Note, that these columns NEVER contained any actual "
                       "value that was accessible by users of the API, so "
                       "this is a technical note.")
-
-        if dialect == "sqlite":
-            op.execute("PRAGMA foreign_keys=ON;")
 
         if has_any_reports:
             LOG.info("Done downgrading 'reports' table structure.")
