@@ -2608,7 +2608,7 @@ class ThriftRequestHandler:
         labels = []
         for checker in checkers:
             analyzer_name = None \
-                if str(checker.analyzerName).lower() != "unknown" \
+                if str(checker.analyzerName).lower() == "unknown" \
                 else str(checker.analyzerName)
 
             labels.append(list(map(
