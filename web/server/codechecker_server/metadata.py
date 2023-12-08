@@ -9,7 +9,7 @@
 Helpers to parse metadata.json file.
 """
 
-from typing import Any, Dict, Iterable, List, Optional, Set, Union, cast
+from typing import Any, Dict, Iterable, List, Optional, Set, cast
 import os
 
 from codechecker_common.logger import get_logger
