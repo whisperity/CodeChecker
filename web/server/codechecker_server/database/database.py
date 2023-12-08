@@ -203,6 +203,8 @@ class SQLServer(metaclass=ABCMeta):
         except Exception as ex:
             LOG.error("Failed to create initial database schema")
             LOG.error(ex)
+            import traceback
+            traceback.print_exc()
             return False
 
     def get_schema_version(self):

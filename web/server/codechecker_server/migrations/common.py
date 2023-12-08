@@ -117,6 +117,7 @@ class AlterContext:
         self.disable_foreign_keys = disable_foreign_keys_during_operation
 
         self.dialect = op.get_context().dialect.name
+        self.batcher_context = None
         self.batcher = None
 
     def _foreign_keys_off(self):
@@ -132,20 +133,27 @@ class AlterContext:
             self._foreign_keys_off()
 
         if self.force_batch or self.dialect == "sqlite":
-            self.batcher = self.op.batch_alter_table(self.table_name,
-                                                     recreate=self.recreate) \
-                .__enter__()
-            return self
+            # Simulate the behaviour of
+            #     with op.batch_alter_table("foo") as ba:
+            # through its context. Clients using AlterContext can use the
+            # object to pass function calls to either the batch context or the
+            # raw Alembic library, depending on the dialect.
+            self.batcher_context = self.op.batch_alter_table(
+                self.table_name, recreate=self.recreate)
+            self.batcher = self.batcher_context.__enter__()
         elif self.dialect == "postgresql":
             # Usually, there is no need for batch operations for PostgreSQL.
-            return self
+            pass
 
-    def __exit__(self, *exc):
+        return self
+
+    def __exit__(self, exc_type, exc_value, traceback):
         if self.disable_foreign_keys:
             self._foreign_keys_on()
 
-        if self.batcher:
-            self.batcher.__exit__(*exc)
+        if self.batcher_context and self.batcher:
+            self.batcher = None
+            self.batcher_context.__exit__(exc_type, exc_value, traceback)
 
     @staticmethod
     def __wraps_alembic(needs_table_name = True,
