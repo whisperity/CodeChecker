@@ -82,8 +82,8 @@ def upgrade():
         op.create_index(op.f("ix_checkers_severity"),
                         "checkers",
                         ["severity"],
-                        unique=False)
-
+                        unique=False
+        )
         op.create_table(
             "analysis_info_checkers",
             sa.Column("analysis_info_id", sa.Integer(), nullable=False),
@@ -344,13 +344,13 @@ def downgrade():
             ac.add_column(col_reports_bug_type, insert_after="checker_cat")
             ac.add_column(col_reports_severity, insert_after="bug_type")
 
-            LOG.debug("Restored type of columns 'reports.bug_type', "
-                      "'reports.checker_cat'. However, their contents can "
-                      "NOT be restored to the original values, as those were "
-                      "irrevocably lost during a previous schema upgrade. "
-                      "Note, that these columns NEVER contained any actual "
-                      "value that was accessible by users of the API, so "
-                      "this is a technical note.")
+            LOG.info("Restored type of columns 'reports.bug_type', "
+                     "'reports.checker_cat'. However, their contents can NOT "
+                     "be restored to the original values, as those were "
+                     "irrevocably lost during a previous schema upgrade. "
+                     "Note, that these columns NEVER contained any actual "
+                     "value that was accessible by users of the API, so "
+                     "this is a technical note.")
 
         if has_any_reports:
             LOG.info("Done downgrading 'reports' table structure.")
