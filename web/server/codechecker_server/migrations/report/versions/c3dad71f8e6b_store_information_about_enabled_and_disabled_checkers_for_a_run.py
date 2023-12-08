@@ -366,9 +366,9 @@ def downgrade():
                 conn.execute(f"""
                     UPDATE reports
                     SET
-                        analyzer_name = "{chk[0]}",
-                        checker_id = "{chk[1]}",
-                        severity = "{checkers_to_severity[chk]}"
+                        analyzer_name = '{chk[0]}',
+                        checker_id = '{chk[1]}',
+                        severity = {checkers_to_severity[chk]}
                     WHERE id IN ({','.join(map(str, report_id_list))});
                 """)
 
