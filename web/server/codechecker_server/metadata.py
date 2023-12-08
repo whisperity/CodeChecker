@@ -28,16 +28,9 @@ CheckerToAnalyzer = Dict[str, str]
 CodeCheckerVersion = Optional[str]
 DisabledCheckers = Set[str]
 EnabledCheckers = Set[str]
-# The original version 1 checker list that contained only the list of the
-# enabled checkers.
-MetadataCheckerInfo_OnlyName = List[str]
-# The version 2 representation of checker information, where "enabled status"
-# is associated with the name in a map. Note, that at some point in 2019,
-# 'metadata.json' files still believed to be "version 1" started using this
-# representation.
-MetadataCheckerInfo_NameWithEnableStatus = Dict[str, bool]
-MetadataCheckerInfo = Union[MetadataCheckerInfo_OnlyName,
-                            MetadataCheckerInfo_NameWithEnableStatus]
+# Checker name to enabled status.
+MetadataCheckerInfo = Dict[str, bool]
+# Analyzer to checker info.
 MetadataCheckers = Dict[str, MetadataCheckerInfo]
 
 
@@ -90,18 +83,12 @@ class MetadataInfoParser:
         Get enabled/disabled checkers and a checker to analyze dictionary.
         """
         for analyzer_name, analyzer_checkers in self.checkers.items():
-            if isinstance(analyzer_checkers, dict):
-                for checker_name, enabled in analyzer_checkers.items():
-                    self.checker_to_analyzer[checker_name] = analyzer_name
-                    if enabled:
-                        self.enabled_checkers.add(checker_name)
-                    else:
-                        self.disabled_checkers.add(checker_name)
-            else:
-                self.enabled_checkers.update(analyzer_checkers)
-
-                for checker_name in analyzer_checkers:
-                    self.checker_to_analyzer[checker_name] = analyzer_name
+            for checker_name, enabled in analyzer_checkers.items():
+                self.checker_to_analyzer[checker_name] = analyzer_name
+                if enabled:
+                    self.enabled_checkers.add(checker_name)
+                else:
+                    self.disabled_checkers.add(checker_name)
 
     def __process_metadata_info_v1(self):
         """ Set metadata information from the old version json file. """
@@ -124,6 +111,23 @@ class MetadataInfoParser:
 
         # Get analyzer checkers.
         self.checkers = self.__metadata_dict.get('checkers', {})
+        for analyzer, checkers in self.checkers.items():
+            if isinstance(checkers, list):
+                # Version 1 metadata files originally only stored the list of
+                # enabled checkers grouped by analyzer. This was true from at
+                # least September 2017
+                # (commit 7254d05a8b7262e4979ac613f32d6c3e0aa0d3cc) all the
+                # way to March 2020
+                # (commit bd775d60950d48884b8f1dc83d8b82653b83cfa3). At that
+                # point, but before the official introduction of "v2" files
+                # the ability to store the enabled status (bool) of a checker
+                # was introduced. However, the mismatch between the
+                # representation types in old formats are causing all sorts of
+                # troubles when getting the 'checkers' data structure, so
+                # instead, represent the structure with the new format even
+                # for a "v1" file. (See web/tests/functional/report_viewer_api)
+                self.checkers[analyzer] = {checker: True
+                                           for checker in checkers}
         self.__process_metadata_checkers()
 
     def __insert_analyzer_statistics(
@@ -240,23 +244,3 @@ class MetadataInfoParser:
         self.cc_version = '; '.join(cc_versions) if cc_versions else None
 
         self.__process_metadata_checkers()
-
-    def get_checker_names(self, analyzer_name: str) -> CheckerNamesView:
-        """
-        Returns the checker names found in the metadata structure, for the
-        sub-list of the specified analyzer.
-        """
-        checkers: Optional[MetadataCheckerInfo] = \
-            self.checkers.get(analyzer_name, None)
-        if checkers is None:
-            return list()
-        if type(checkers) is list:
-            return cast(MetadataCheckerInfo_OnlyName, checkers)
-        if type(checkers) is dict:
-            return cast(MetadataCheckerInfo_NameWithEnableStatus, checkers) \
-                .keys()
-
-        raise NotImplementedError("Unknown kind of 'checkers' data structure "
-                                  "encountered in 'metadata.json'. "
-                                  "This should've never happened, unless a "
-                                  "'version: 3' metadata.json exists!")

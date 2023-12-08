@@ -44,11 +44,19 @@ metadata_cc_info = {
             'abseil-string-find-startswith': False
         }
     },
+    "checkers_enabled_only": {
+        "clangsa": {
+            "deadcode.DeadStores": True
+        },
+        "clang-tidy": {
+            "bugprone-use-after-move": True,
+        }
+    },
     "analyzers": [
         "clang-tidy",
         "clangsa"
     ],
-    "checker_names_per_analyzer": {
+    "analyzers_to_checkers": {
         "clangsa": [
             "alpha.clone.CloneChecker",
             "deadcode.DeadStores"
@@ -156,18 +164,8 @@ class MetadataInfoParserTest(unittest.TestCase):
         self.assertListEqual(metadata_cc_info["analyzers"],
                              mip.analyzers)
 
-        # v1 metadata could not store the information that a checker was
-        # disabled, only the list of enabled checkers were added to the format.
-        # See web/tests/functional/report_viewer_api/test_files/metadata.json.
-        self.assertDictEqual(metadata_cc_info["checker_names_per_analyzer"],
+        self.assertDictEqual(metadata_cc_info["checkers_enabled_only"],
                              mip.checkers)
-
-        self.assertListEqual(metadata_cc_info
-                             ["checker_names_per_analyzer"]["clangsa"],
-                             list(mip.get_checker_names("clangsa")))
-        self.assertListEqual(metadata_cc_info
-                             ["checker_names_per_analyzer"]["clang-tidy"],
-                             list(mip.get_checker_names("clang-tidy")))
 
     def test_metadata_info_v1_point_5(self):
         """
@@ -180,6 +178,12 @@ class MetadataInfoParserTest(unittest.TestCase):
 
         self.assertDictEqual(metadata_cc_info["checkers"],
                              mip.checkers)
+        self.assertListEqual(metadata_cc_info
+                             ["analyzers_to_checkers"]["clangsa"],
+                             list(mip.checkers["clangsa"].keys()))
+        self.assertListEqual(metadata_cc_info
+                             ["analyzers_to_checkers"]["clang-tidy"],
+                             list(mip.checkers["clang-tidy"].keys()))
 
     def test_metadata_info_v2(self):
         """ Get metadata info for new version format json. """
@@ -201,16 +205,14 @@ class MetadataInfoParserTest(unittest.TestCase):
         self.assertListEqual(metadata_cc_info["analyzers"],
                              mip.analyzers)
 
-
         self.assertDictEqual(metadata_cc_info["checkers"],
                              mip.checkers)
-
         self.assertListEqual(metadata_cc_info
-                             ["checker_names_per_analyzer"]["clangsa"],
-                             list(mip.get_checker_names("clangsa")))
+                             ["analyzers_to_checkers"]["clangsa"],
+                             list(mip.checkers["clangsa"].keys()))
         self.assertListEqual(metadata_cc_info
-                             ["checker_names_per_analyzer"]["clang-tidy"],
-                             list(mip.get_checker_names("clang-tidy")))
+                             ["analyzers_to_checkers"]["clang-tidy"],
+                             list(mip.checkers["clang-tidy"].keys()))
 
     def test_multiple_metadata_info(self):
         """ Get metadata info from multiple analyzers. """

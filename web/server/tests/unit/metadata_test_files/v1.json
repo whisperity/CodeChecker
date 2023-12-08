@@ -16,11 +16,9 @@
   },
   "checkers": {
     "clang-tidy": [
-      "abseil-string-find-startswith",
       "bugprone-use-after-move"
     ],
     "clangsa": [
-      "alpha.clone.CloneChecker",
       "deadcode.DeadStores"
     ]
   },

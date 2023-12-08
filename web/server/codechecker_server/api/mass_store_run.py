@@ -732,10 +732,9 @@ class MassStoreRun:
                         db_checkers = {r.checker_name: r for r in db_checkers}
 
                         connection_rows = [AnalysisInfoChecker(
-                            analysis_info, db_checkers[checker_name],
-                            checker_name in mip.enabled_checkers)
-                            for checker_name
-                            in mip.get_checker_names(analyzer)]
+                            analysis_info, db_checkers[chk], is_enabled)
+                            for chk, is_enabled
+                            in mip.checkers.get(analyzer, dict()).items()]
                         for r in connection_rows:
                             session.add(r)
 
@@ -1427,13 +1426,13 @@ class MassStoreRun:
                             MetadataInfoParser(metadata_file_path)
 
                 with LogTask(run_name=self.__name,
-                             message="Get look-up ID for all checkers"):
+                             message="Get look-up ID for all known checkers"):
                     checkers_in_metadata = {
                         (analyzer, checker)
                         for metadata in self.__mips.values()
                         for analyzer in metadata.analyzers
                         for checker
-                        in metadata.get_checker_names(analyzer)}
+                        in metadata.checkers.get(analyzer, dict()).keys()}
                     self.__store_checker_identifiers(checkers_in_metadata)
 
                 try:
