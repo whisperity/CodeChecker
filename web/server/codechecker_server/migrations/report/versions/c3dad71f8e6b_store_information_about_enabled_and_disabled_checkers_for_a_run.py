@@ -22,7 +22,7 @@ from sqlalchemy.orm import Session
 from sqlalchemy.ext.automap import automap_base
 
 from codechecker_common.util import progress
-from codechecker_server.migrations.report.common import \
+from codechecker_server.migrations.common import \
     AlterContext, \
     recompress_zlib_as_untagged, recompress_zlib_as_tagged_exact_ratio
 

@@ -198,12 +198,12 @@ class AlterContext:
             return _wrapper
         return _do_wrap
 
-    @__unsupported_nonbatch_kwargs("insert_before", "insert_after")
+    @__unsupported_nonbatch_kwargs("insert_after", "insert_before")
     @__wraps_alembic()
     def add_column(self, *args, **kwargs):
         pass
 
-    @__unsupported_nonbatch_kwargs("insert_before", "insert_after")
+    @__unsupported_nonbatch_kwargs("insert_after", "insert_before")
     @__wraps_alembic()
     def alter_column(self, *args, **kwargs):
         pass

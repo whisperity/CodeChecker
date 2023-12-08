@@ -20,7 +20,7 @@ from io import StringIO
 
 from codechecker_common.source_code_comment_handler import \
     SourceCodeCommentHandler, SpellException
-from codechecker_server.migrations.report.common import AlterContext
+from codechecker_server.migrations.common import AlterContext
 
 
 def upgrade():

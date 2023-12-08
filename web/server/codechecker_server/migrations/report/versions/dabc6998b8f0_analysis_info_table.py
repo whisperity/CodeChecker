@@ -12,11 +12,14 @@ down_revision = 'af5d8a21c1e4'
 branch_labels = None
 depends_on = None
 
+from logging import getLogger
+
 from alembic import op
 import sqlalchemy as sa
 
 
 def upgrade():
+    LOG = getLogger("migration")
     conn = op.get_bind()
     ctx = op.get_context()
     dialect = ctx.dialect.name
@@ -88,7 +91,7 @@ def upgrade():
         op.bulk_insert(
             run_history_analysis_info_tbl, run_history_analysis_info)
     except:
-        print("Analyzer command data migration failed!")
+        LOG.error("Analyzer command data migration failed!")
     else:
         # If data migration was successfully finished we can remove the
         # columns.
