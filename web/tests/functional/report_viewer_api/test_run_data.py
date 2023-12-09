@@ -190,7 +190,7 @@ class TestRunData(unittest.TestCase):
         analysis_infos = self._cc_client.getAnalysisInfo(
             AnalysisInfoFilter(run_id, None, None), 1, 0)
         self.assertEqual(len(analysis_infos), 1,
-                        "An analysis_info must be recorded for the run!")
+                         "An analysis_info must be recorded for the run!")
 
         a_info = analysis_infos[0]
         a_cmd = a_info.analyzerCommand
