@@ -37,11 +37,14 @@ from codechecker_report_converter.report.hash import get_report_path_hash
 from ..database import db_cleanup
 from ..database.config_db_model import Product
 from ..database.database import DBSession
-from ..database.run_db_model import AnalysisInfo, AnalysisInfoChecker, \
-    AnalyzerStatistic, BugPathEvent, BugReportPoint, Checker, \
-    ExtendedReportData, File, FileContent, Report as DBReport, \
-    ReportAnnotations, ReviewStatus as ReviewStatusRule, Run, RunHistory, \
-    RunLock
+from ..database.run_db_model import \
+    AnalysisInfo, AnalysisInfoChecker, AnalyzerStatistic, \
+    BugPathEvent, BugReportPoint, \
+    Checker, \
+    ExtendedReportData, \
+    File, FileContent, \
+    Report as DBReport, ReportAnnotations, ReviewStatus as ReviewStatusRule, \
+    Run, RunLock, RunHistory
 from ..metadata import checker_is_unavailable, MetadataInfoParser
 
 from .report_server import ThriftRequestHandler
