@@ -5,11 +5,14 @@
 #  SPDX-License-Identifier: Apache-2.0 WITH LLVM-exception
 #
 # -------------------------------------------------------------------------
+"""
+Multiprocess compatibility module.
+"""
 
-from typing import Callable, List, Optional, Union
+import sys
 
-
-class CheckerLabels:
-    severity: Callable[[str], str]
-    label_of_checker: Callable[
-        [str, str, Optional[str]], Union[str, List[str]]]
+# pylint: disable=unused-import
+if sys.platform in ["darwin", "win32"]:
+    from multiprocess import Pool as MultiProcessPool
+else:
+    from concurrent.futures import ProcessPoolExecutor as MultiProcessPool

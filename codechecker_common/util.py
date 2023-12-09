@@ -12,6 +12,7 @@ import itertools
 import json
 from math import ceil
 from typing import Callable, TextIO
+import os
 
 import portalocker
 
@@ -128,3 +129,10 @@ def get_linef(fp: TextIO, line_no: int) -> str:
         if line_no == 0:
             return line
     return ''
+
+
+def path_for_fake_root(full_path: str, root_path: str = '/') -> str:
+    """Normalize and sanitize full_path, then make it relative to root_path."""
+    relative_path = os.path.relpath(full_path, '/')
+    fake_root_path = os.path.join(root_path, relative_path)
+    return os.path.realpath(fake_root_path)

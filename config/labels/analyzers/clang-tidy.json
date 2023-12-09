@@ -204,6 +204,13 @@
       "profile:sensitive",
       "severity:LOW"
     ],
+    "bugprone-casting-through-void": [
+      "doc_url:https://clang.llvm.org/extra/clang-tidy/checks/bugprone/casting-through-void.html",
+      "profile:extreme",
+      "profile:sensitive",
+      "severity:MEDIUM"
+    ],
+
     "bugprone-compare-pointer-to-member-virtual-function": [
       "doc_url:https://clang.llvm.org/extra/clang-tidy/checks/bugprone/compare-pointer-to-member-virtual-function.html",
       "profile:default",
@@ -5296,7 +5303,6 @@
     ],
     "cppcoreguidelines-special-member-functions": [
       "doc_url:https://clang.llvm.org/extra/clang-tidy/checks/cppcoreguidelines/special-member-functions.html",
-      "profile:default",
       "profile:extreme",
       "profile:sensitive",
       "severity:LOW"
@@ -5375,7 +5381,6 @@
     ],
     "google-global-names-in-headers": [
       "doc_url:https://clang.llvm.org/extra/clang-tidy/checks/google/global-names-in-headers.html",
-      "profile:default",
       "profile:extreme",
       "profile:sensitive",
       "severity:STYLE"
@@ -6001,7 +6006,6 @@
     ],
     "misc-use-anonymous-namespace": [
       "doc_url:https://clang.llvm.org/extra/clang-tidy/checks/misc/use-anonymous-namespace.html",
-      "profile:default",
       "profile:extreme",
       "profile:sensitive",
       "severity:LOW"
@@ -6167,11 +6171,22 @@
       "profile:extreme",
       "severity:LOW"
     ],
+    "modernize-use-starts-ends-with": [
+      "doc_url:https://clang.llvm.org/extra/clang-tidy/checks/modernize/use-starts-ends-with.html",
+      "profile:extreme",
+      "severity:LOW"
+    ],
     "modernize-use-std-print": [
       "doc_url:https://clang.llvm.org/extra/clang-tidy/checks/modernize/use-std-print.html",
       "profile:extreme",
       "severity:LOW"
     ],
+    "modernize-use-std-numbers": [
+      "doc_url:https://clang.llvm.org/extra/clang-tidy/checks/modernize/use-std-numbers.html",
+      "profile:extreme",
+      "severity:LOW"
+    ],
+
     "modernize-use-trailing-return-type": [
       "doc_url:https://clang.llvm.org/extra/clang-tidy/checks/modernize/use-trailing-return-type.html",
       "profile:extreme",
