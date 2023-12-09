@@ -115,7 +115,7 @@ def unsupported_nonbatch_kwargs(*arg_names):
         def _wrapper(self, *args, **kwargs):
             kwargs = {k: v for k, v in dict(kwargs).items()
                       if k not in arg_names} \
-                if self.is_batching else dict(kwargs)
+                if not self.is_batching else dict(kwargs)
             return function(self, *args, **kwargs)
         return _wrapper
     return _do_wrap
