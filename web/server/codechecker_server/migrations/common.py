@@ -113,14 +113,10 @@ def unsupported_nonbatch_kwargs(*arg_names):
     def _do_wrap(function):
         @wraps(function)
         def _wrapper(self, *args, **kwargs):
-            # print("unsupported_nonbatch_kwargs:", function, self, self.is_batching)
-            # print("\tArgs:", [self, args, kwargs])
             kwargs = {k: v for k, v in dict(kwargs).items()
                       if k not in arg_names} \
                 if self.is_batching else dict(kwargs)
-            # print("\tDispatching:", function, self, args, kwargs)
             return function(self, *args, **kwargs)
-        # print("unsupported_nonbatch_kwargs", "decorating", function, "with", _wrapper)
         return _wrapper
     return _do_wrap
 
@@ -139,12 +135,8 @@ def wrap_alembic_op(needs_table_name = True,
     # @staticmethod and used only within the class's scope.
     def _do_wrap(function):
         function_name = function.__name__
-
         @wraps(function)
         def _wrapper(self, *args, **kwargs):
-            # type(self) == AlterContext, function == add_column (example)
-            # print("wrap_alembic_op:", function, self, needs_table_name, needs_table_name_in_batch_mode, table_name_as_kwarg)
-            # print("\tArgs:", [self, args, kwargs])
             if self.is_batching:
                 op_fn = getattr(self.batcher, function_name)
                 pass_table_name = needs_table_name and \
@@ -161,10 +153,7 @@ def wrap_alembic_op(needs_table_name = True,
                     kwargs["table_name" if table_name_as_kwarg is True
                            else table_name_as_kwarg] = self.table_name
 
-            # print("\tDispatching:", op_fn, args, kwargs)
             return op_fn(*args, **kwargs)
-
-        # print("wrap_alembic_op", "decorating", function, "with", _wrapper)
         return _wrapper
     return _do_wrap
 
@@ -223,7 +212,9 @@ class AlterContext:
             self._foreign_keys_on()
 
         if self.is_batching:
-            self.batcher_context.__exit__(exc_type, exc_value, traceback)
+            cast(Any, self.batcher_context).__exit__(exc_type,
+                                                     exc_value,
+                                                     traceback)
             self.batcher = None
 
     @unsupported_nonbatch_kwargs("insert_after", "insert_before")
