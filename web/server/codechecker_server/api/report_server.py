@@ -27,6 +27,7 @@ from typing import Dict, List, Optional, Set, Tuple
 import sqlalchemy
 from sqlalchemy.sql.expression import or_, and_, not_, func, \
     asc, desc, union_all, select, bindparam, literal_column
+from sqlalchemy.orm import contains_eager
 
 import codechecker_api_shared
 from codechecker_api.codeCheckerDBAccess_v6 import constants, ttypes
@@ -243,18 +244,28 @@ def process_report_filter(
               for cm in report_filter.checkerMsg]
         AND.append(or_(*OR))
 
-    if report_filter.checkerName or report_filter.analyzerNames:
-        if report_filter.checkerName:
-            OR = [Checker.checker_name.ilike(conv(cn))
-                  for cn in report_filter.checkerName]
-            AND.append(or_(*OR))
-
+    if report_filter.analyzerNames or report_filter.checkerName \
+            or report_filter.severity:
         if report_filter.analyzerNames:
             OR = [Checker.analyzer_name.ilike(conv(an))
                   for an in report_filter.analyzerNames]
             AND.append(or_(*OR))
 
-        join_tables.append(Checker)
+        if report_filter.checkerName:
+            OR = [Checker.checker_name.ilike(conv(cn))
+                  for cn in report_filter.checkerName]
+            AND.append(or_(*OR))
+
+        if report_filter.severity:
+            AND.append(Checker.severity.in_(report_filter.severity))
+
+        # The "Checker" entity is eagerly loaded for each "Report" as there is
+        # a guaranteed FOREIGN KEY ... NOT NULL relationship to a valid entity.
+        # Because of this, adding "join_tables.append(Checker)" here is
+        # actually ill-formed, as it would result in queries that ambiguously
+        # refer to the same table twice:
+        #  >   (psycopg2.errors.DuplicateAlias) table name "checkers" specified
+        #  >   more than once
 
     if report_filter.runName:
         OR = [Run.name.ilike(conv(rn))
@@ -292,10 +303,6 @@ def process_report_filter(
             OR.append(Report.bug_id.in_(q))
 
         AND.append(or_(*OR))
-
-    if report_filter.severity:
-        AND.append(Checker.severity.in_(report_filter.severity))
-        join_tables.append(Checker)
 
     if report_filter.detectionStatus:
         dst = list(map(detection_status_str,
@@ -967,8 +974,6 @@ def apply_report_filter(q, filter_expression, join_tables):
     Applies the given filter expression and joins the File, Run and RunHistory
     tables if necessary based on join_tables parameter.
     """
-    if Checker in join_tables:
-        q = q.outerjoin(Checker, Checker.id == Report.checker_id)
     if File in join_tables:
         q = q.outerjoin(File, Report.file_id == File.id)
     if Run in join_tables:
@@ -1882,9 +1887,8 @@ class ThriftRequestHandler:
                 q = session.query(Report,
                                   File.filename,
                                   *annotation_cols.values()) \
-                    .outerjoin(
-                        Checker,
-                        Report.checker_id == Checker.id) \
+                    .join(Checker) \
+                    .options(contains_eager(Report.checker)) \
                     .outerjoin(
                         File,
                         Report.file_id == File.id) \
@@ -1911,7 +1915,7 @@ class ThriftRequestHandler:
                                        sort_types,
                                        sort_type_map,
                                        order_type_map)
-                q = q.group_by(Report.id, File.id)
+                q = q.group_by(Report.id, File.id, Checker.id)
 
                 query_result = q.all()
 
@@ -1965,13 +1969,12 @@ class ThriftRequestHandler:
                 q = session.query(Report,
                                   File.filepath,
                                   *annotation_cols.values()) \
+                    .join(Checker) \
+                    .options(contains_eager(Report.checker)) \
                     .outerjoin(
                         ReportAnnotations,
                         Report.id == ReportAnnotations.report_id)
 
-                if Checker not in join_tables:
-                    q = q.outerjoin(Checker,
-                                    Report.checker_id == Checker.id)
                 if File not in join_tables:
                     q = q.outerjoin(File, Report.file_id == File.id)
 
@@ -1980,8 +1983,9 @@ class ThriftRequestHandler:
                 # "files" table is joined for gathering file names belonging to
                 # the given report. According to SQL syntax if there is a group
                 # by report IDs then files should also be either grouped or an
-                # aggregate function must be applied on them.
-                q = q.group_by(Report.id, File.id)
+                # aggregate function must be applied on them. The same applies
+                # to the "checkers" table.
+                q = q.group_by(Report.id, File.id, Checker.id)
 
                 q = apply_report_filter(q, filter_expression, join_tables)
                 q = sort_results_query(q,
@@ -2770,9 +2774,8 @@ class ThriftRequestHandler:
             extended_table = session \
                 .query(Report.bug_id,
                        Checker.checker_name,
-                       Checker.severity)
-            if Checker not in join_tables:
-                extended_table = extended_table.join(Checker)
+                       Checker.severity) \
+                .join(Checker)
 
             if report_filter.annotations is not None:
                 extended_table = extended_table.outerjoin(
@@ -2841,9 +2844,8 @@ class ThriftRequestHandler:
 
             extended_table = session \
                 .query(Checker.analyzer_name,
-                       Report.bug_id)
-            if Checker not in join_tables:
-                extended_table = extended_table.join(Checker)
+                       Report.bug_id) \
+                .join(Checker)
 
             if report_filter.annotations is not None:
                 extended_table = extended_table.outerjoin(
@@ -2900,9 +2902,8 @@ class ThriftRequestHandler:
 
             extended_table = session \
                 .query(Report.bug_id,
-                       Checker.severity)
-            if Checker not in join_tables:
-                extended_table = extended_table.join(Checker)
+                       Checker.severity) \
+                .join(Checker)
 
             if report_filter.annotations is not None:
                 extended_table = extended_table.outerjoin(
