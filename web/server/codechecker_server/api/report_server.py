@@ -1563,6 +1563,7 @@ class ThriftRequestHandler:
                         .limit(limit).offset(offset)
 
                 for cmd in analysis_info_query:
+                    # FIXME: Obtain and populate the "checkers" field.
                     res.append(ttypes.AnalysisInfo(
                         analyzerCommand=html.escape(cmd.analyzer_command)))
 

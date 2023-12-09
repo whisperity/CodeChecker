@@ -17,8 +17,11 @@ import unittest
 
 from libtest import env
 
-from codechecker_api.codeCheckerDBAccess_v6.ttypes import DetectionStatus, \
-    Order, ReportFilter, RunFilter, RunSortMode, RunSortType
+from codechecker_api.codeCheckerDBAccess_v6.ttypes import \
+    AnalysisInfoFilter, \
+    DetectionStatus, \
+    Order, \
+    ReportFilter, RunFilter, RunSortMode, RunSortType
 
 from . import setup_class_common, teardown_class_common
 
@@ -171,3 +174,36 @@ class TestRunData(unittest.TestCase):
         # contains special characters.
         sort_mode = RunSortMode(RunSortType.NAME, Order.ASC)
         self._cc_client.getRunData(None, None, 0, sort_mode)
+
+    def test_analysis_info(self):
+        """
+        Test that storing runs to the server records the executed analyzer
+        command and the list of checkers present and executed.
+        """
+        workspace = os.environ["TEST_WORKSPACE"]
+        runs = self.__get_runs("test_files*%")
+        self.assertEqual(len(runs), 1,
+                         "There should be one run for this test.")
+        run = runs[0]
+        run_id = run.runId
+
+        analysis_infos = self._cc_client.getAnalysisInfo(
+            AnalysisInfoFilter(run_id, None, None), 1, 0)
+        self.assertEqual(len(analysis_infos), 1,
+                        "An analysis_info must be recorded for the run!")
+
+        a_info = analysis_infos[0]
+        a_cmd = a_info.analyzerCommand
+        print(run_id, analysis_infos)
+
+        self.assertTrue(workspace in a_cmd,
+                        "The name of the test workspace should be part of "
+                        "the report directory.")
+        self.assertTrue("-d core.StackAddressEscape" in a_cmd,
+                        "A disabled checker is needed for this test to work!")
+        self.assertTrue("-e clang-diagnostic-division-by-zero" in a_cmd,
+                        "An enabled checker is needed for this test to work!")
+
+        a_checkers = a_info.checkers
+        self.assertIsNone(a_checkers)
+        # FIXME: Test the returned output once something is returned!
