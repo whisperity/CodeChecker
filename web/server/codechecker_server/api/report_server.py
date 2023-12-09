@@ -22,7 +22,7 @@ import zlib
 from copy import deepcopy
 from collections import OrderedDict, defaultdict
 from datetime import datetime, timedelta
-from typing import Dict, List, Optional, Set, Tuple
+from typing import Any, Dict, List, Optional, Set, Tuple
 
 import sqlalchemy
 from sqlalchemy.sql.expression import or_, and_, not_, func, \
@@ -259,13 +259,7 @@ def process_report_filter(
         if report_filter.severity:
             AND.append(Checker.severity.in_(report_filter.severity))
 
-        # The "Checker" entity is eagerly loaded for each "Report" as there is
-        # a guaranteed FOREIGN KEY ... NOT NULL relationship to a valid entity.
-        # Because of this, adding "join_tables.append(Checker)" here is
-        # actually ill-formed, as it would result in queries that ambiguously
-        # refer to the same table twice:
-        #  >   (psycopg2.errors.DuplicateAlias) table name "checkers" specified
-        #  >   more than once
+        join_tables.append(Checker)
 
     if report_filter.runName:
         OR = [Run.name.ilike(conv(rn))
@@ -969,16 +963,26 @@ def create_review_data(
         isInSource=is_in_source)
 
 
-def apply_report_filter(q, filter_expression, join_tables):
+def apply_report_filter(q, filter_expression,
+                        join_tables: List[Any],
+                        already_joined_tables: Optional[List[Any]] = None):
     """
-    Applies the given filter expression and joins the File, Run and RunHistory
-    tables if necessary based on join_tables parameter.
+    Applies the given filter expression and joins the Checker, File, Run, and
+    RunHistory tables if necessary based on join_tables parameter. If a table
+    is already joined by the main query and this is indicated, that will not
+    be joined by this function to prevent a "duplicate alias" error.
     """
-    if File in join_tables:
+    def needs_join(tbl):
+        return tbl in join_tables and (already_joined_tables is None or
+                                       tbl not in already_joined_tables)
+
+    if needs_join(Checker):
+        q = q.join(Checker, Report.checker_id == Checker.id)
+    if needs_join(File):
         q = q.outerjoin(File, Report.file_id == File.id)
-    if Run in join_tables:
+    if needs_join(Run):
         q = q.outerjoin(Run, Run.id == Report.run_id)
-    if RunHistory in join_tables:
+    if needs_join(RunHistory):
         q = q.outerjoin(RunHistory, RunHistory.run_id == Report.run_id)
 
     return q.filter(filter_expression)
@@ -1627,6 +1631,8 @@ class ThriftRequestHandler:
             result = session \
                 .query(Report, File) \
                 .filter(Report.id == reportId) \
+                .join(Checker, Report.checker_id == Checker.id) \
+                .options(contains_eager(Report.checker)) \
                 .outerjoin(File, Report.file_id == File.id) \
                 .limit(1).one_or_none()
 
@@ -1887,7 +1893,8 @@ class ThriftRequestHandler:
                 q = session.query(Report,
                                   File.filename,
                                   *annotation_cols.values()) \
-                    .join(Checker) \
+                    .join(Checker,
+                          Report.checker_id == Checker.id) \
                     .options(contains_eager(Report.checker)) \
                     .outerjoin(
                         File,
@@ -1969,14 +1976,14 @@ class ThriftRequestHandler:
                 q = session.query(Report,
                                   File.filepath,
                                   *annotation_cols.values()) \
-                    .join(Checker) \
+                    .join(Checker,
+                          Report.checker_id == Checker.id) \
                     .options(contains_eager(Report.checker)) \
+                    .outerjoin(File,
+                               Report.file_id == File.id) \
                     .outerjoin(
                         ReportAnnotations,
                         Report.id == ReportAnnotations.report_id)
-
-                if File not in join_tables:
-                    q = q.outerjoin(File, Report.file_id == File.id)
 
                 # Grouping by "reports.id" is described at the beginning of
                 # this function. Grouping by "files.id" is necessary, because
@@ -1987,7 +1994,13 @@ class ThriftRequestHandler:
                 # to the "checkers" table.
                 q = q.group_by(Report.id, File.id, Checker.id)
 
-                q = apply_report_filter(q, filter_expression, join_tables)
+                # The "Checker" entity is eagerly loaded for each "Report" as
+                # there is a guaranteed FOREIGN KEY ... NOT NULL relationship
+                # to a valid entity. Because of this, letting "join_tables"
+                # add "Checker" here is actually ill-formed, as it would
+                # result in queries that ambiguously refer to the same table.
+                q = apply_report_filter(q, filter_expression, join_tables,
+                                        [File, Checker])
                 q = sort_results_query(q,
                                        sort_types,
                                        sort_type_map,
@@ -2775,7 +2788,8 @@ class ThriftRequestHandler:
                 .query(Report.bug_id,
                        Checker.checker_name,
                        Checker.severity) \
-                .join(Checker)
+                .join(Checker,
+                      Report.checker_id == Checker.id)
 
             if report_filter.annotations is not None:
                 extended_table = extended_table.outerjoin(
@@ -2784,7 +2798,7 @@ class ThriftRequestHandler:
                 extended_table = extended_table.group_by(Report.id)
 
             extended_table = apply_report_filter(
-                extended_table, filter_expression, join_tables)
+                extended_table, filter_expression, join_tables, [Checker])
 
             extended_table = extended_table.subquery()
 
@@ -2845,7 +2859,8 @@ class ThriftRequestHandler:
             extended_table = session \
                 .query(Checker.analyzer_name,
                        Report.bug_id) \
-                .join(Checker)
+                .join(Checker,
+                      Report.checker_id == Checker.id)
 
             if report_filter.annotations is not None:
                 extended_table = extended_table.outerjoin(
@@ -2854,7 +2869,7 @@ class ThriftRequestHandler:
                 extended_table = extended_table.group_by(Report.id)
 
             extended_table = apply_report_filter(
-                extended_table, filter_expression, join_tables)
+                extended_table, filter_expression, join_tables, [Checker])
 
             extended_table = extended_table.subquery()
 
@@ -2903,7 +2918,8 @@ class ThriftRequestHandler:
             extended_table = session \
                 .query(Report.bug_id,
                        Checker.severity) \
-                .join(Checker)
+                .join(Checker,
+                      Report.checker_id == Checker.id)
 
             if report_filter.annotations is not None:
                 extended_table = extended_table.outerjoin(
@@ -2912,7 +2928,7 @@ class ThriftRequestHandler:
                 extended_table = extended_table.group_by(Report.id)
 
             extended_table = apply_report_filter(
-                extended_table, filter_expression, join_tables)
+                extended_table, filter_expression, join_tables, [Checker])
 
             extended_table = extended_table.subquery()
 
