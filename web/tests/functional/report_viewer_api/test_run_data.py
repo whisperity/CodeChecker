@@ -18,7 +18,7 @@ import unittest
 from libtest import env
 
 from codechecker_api.codeCheckerDBAccess_v6.ttypes import \
-    AnalysisInfo, AnalysisInfoChecker, AnalysisInfoFilter, \
+    AnalysisInfoFilter, \
     DetectionStatus, \
     Order, \
     ReportFilter, RunFilter, RunSortMode, RunSortType
