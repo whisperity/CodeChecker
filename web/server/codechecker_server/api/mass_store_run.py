@@ -96,7 +96,10 @@ class _RunLock:
         self.__session = None
 
     def noop(self):
-        """Does nothing, but prevents Pylint from complaining."""
+        """
+        Does nothing, but prevents Pylint from complaining, and prevents the
+        context from being optimised out.
+        """
         return None
 
 
@@ -602,16 +605,14 @@ class MassStoreRun:
             try:
                 LOG.debug("[%s] Begin attempt %d...", self.__name, tries)
                 with DBSession(self.__Session) as session:
-                    known_checkers = session.query(Checker) \
-                        .all()
                     known_checkers = {(r.analyzer_name, r.checker_name)
-                                      for r in known_checkers}
+                                      for r in session.query(Checker).all()}
                     unknown_checkers = all_checkers - known_checkers
                     for r in unknown_checkers:
-                        anal, chk = r[0], r[1]
+                        analyzer, checker = r[0], r[1]
                         s = self.__context.checker_labels.severity(r[1])
                         s = ttypes.Severity._NAMES_TO_VALUES[s]
-                        session.add(Checker(anal, chk, s))
+                        session.add(Checker(analyzer, checker, s))
 
                     session.commit()
                     return
@@ -728,11 +729,10 @@ class MassStoreRun:
                     session.refresh(analysis_info, ["id"])
 
                     for analyzer in mip.analyzers:
-                        db_checkers = session \
+                        q = session \
                             .query(Checker) \
-                            .filter(Checker.analyzer_name == analyzer) \
-                            .all()
-                        db_checkers = {r.checker_name: r for r in db_checkers}
+                            .filter(Checker.analyzer_name == analyzer)
+                        db_checkers = {r.checker_name: r for r in q.all()}
 
                         connection_rows = [AnalysisInfoChecker(
                             analysis_info, db_checkers[chk], is_enabled)
@@ -942,13 +942,11 @@ class MassStoreRun:
         at the real checker.
         """
         try:
-            grouped_by_checker: Dict[Tuple[str, str], List[int]] = dict()
+            grouped_by_checker: Dict[Tuple[str, str], List[int]] = \
+                defaultdict(list)
             for report_id, report in self.__reports_with_fake_checkers:
                 checker: Tuple[str, str] = checker_name_for_report(report)
-                try:
-                    grouped_by_checker[checker].append(report_id)
-                except KeyError:
-                    grouped_by_checker[checker] = [report_id]
+                grouped_by_checker[checker].append(report_id)
 
             for chk, report_ids in grouped_by_checker.items():
                 analyzer_name, checker_name = chk

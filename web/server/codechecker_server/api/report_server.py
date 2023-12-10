@@ -32,7 +32,7 @@ from sqlalchemy.orm import contains_eager
 import codechecker_api_shared
 from codechecker_api.codeCheckerDBAccess_v6 import constants, ttypes
 from codechecker_api.codeCheckerDBAccess_v6.ttypes import \
-    AnalysisInfoFilter, \
+    AnalysisInfoFilter, AnalysisInfoChecker as API_AnalysisInfoChecker, \
     BlameData, BlameInfo, BugPathPos, \
     CheckerCount, Commit, CommitAuthor, CommentData, \
     DiffType, \
@@ -57,13 +57,14 @@ from ..database import db_cleanup
 from ..database.config_db_model import Product
 from ..database.database import conv, DBSession, escape_like
 from ..database.run_db_model import \
-    AnalysisInfo, AnalyzerStatistic, \
+    AnalysisInfo, AnalysisInfoChecker as DB_AnalysisInfoChecker, \
+    AnalyzerStatistic, \
     BugPathEvent, BugReportPoint, \
     CleanupPlan, CleanupPlanReportHash, Checker, Comment, \
     ExtendedReportData, \
     File, FileContent, \
-    Report, ReportAnnotations, ReportAnalysisInfo, ReviewStatus, Run, \
-    RunHistory, RunHistoryAnalysisInfo, RunLock, \
+    Report, ReportAnnotations, ReportAnalysisInfo, ReviewStatus, \
+    Run, RunHistory, RunHistoryAnalysisInfo, RunLock, \
     SourceComponent
 
 from .thrift_enum_helper import detection_status_enum, \
@@ -1563,9 +1564,25 @@ class ThriftRequestHandler:
                         .limit(limit).offset(offset)
 
                 for cmd in analysis_info_query:
-                    # FIXME: Obtain and populate the "checkers" field.
+                    checkers_q = session \
+                        .query(Checker.analyzer_name,
+                               Checker.checker_name,
+                               DB_AnalysisInfoChecker.enabled) \
+                        .join(Checker, DB_AnalysisInfoChecker.checker_id ==
+                              Checker.id) \
+                        .filter(DB_AnalysisInfoChecker.
+                                analysis_info_id == cmd.id)
+
+                    checkers: Dict[str, Dict[str, API_AnalysisInfoChecker]] = \
+                        defaultdict(dict)
+                    for chk in checkers_q.all():
+                        analyzer, checker, enabled = chk
+                        checkers[analyzer][checker] = API_AnalysisInfoChecker(
+                            enabled=enabled)
+
                     res.append(ttypes.AnalysisInfo(
-                        analyzerCommand=html.escape(cmd.analyzer_command)))
+                        analyzerCommand=html.escape(cmd.analyzer_command),
+                        checkers=checkers))
 
         return res
 
