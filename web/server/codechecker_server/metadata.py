@@ -118,14 +118,15 @@ class MetadataInfoParser:
                 # least September 2017
                 # (commit 7254d05a8b7262e4979ac613f32d6c3e0aa0d3cc) all the
                 # way to March 2020
-                # (commit bd775d60950d48884b8f1dc83d8b82653b83cfa3). At that
-                # point, but before the official introduction of "v2" files
-                # the ability to store the enabled status (bool) of a checker
-                # was introduced. However, the mismatch between the
-                # representation types in old formats are causing all sorts of
-                # troubles when getting the 'checkers' data structure, so
-                # instead, represent the structure with the new format even
-                # for a "v1" file. (See web/tests/functional/report_viewer_api)
+                # (commit bd775d60950d48884b8f1dc83d8b82653b83cfa3). Before
+                # the official introduction of "v2" files, in December 2019,
+                # (commit 0cd28acac7d31e4a0260c147b8e803b7a36908f0) the
+                # ability to store the enabled status (bool) of a checker
+                # was added. However, the mismatch between the representation
+                # types in old formats are causing all sorts of troubles when
+                # getting the 'checkers' data structure, so instead, represent
+                # the structure with the new format even for a "v1" file.
+                # (See web/tests/functional/report_viewer_api)
                 self.checkers[analyzer] = {checker: True
                                            for checker in checkers}
         self.__process_metadata_checkers()
