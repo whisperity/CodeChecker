@@ -548,7 +548,7 @@ service codeCheckerDBAccess {
                          2: i64 runId)
                          throws (1: codechecker_api_shared.RequestFailed requestError),
 
-  // Get analyzer commands based on the given filters.
+  // Get analyzer execution information based on the given filters.
   // PERMISSION: PRODUCT_VIEW
   list<AnalysisInfo> getAnalysisInfo(1: AnalysisInfoFilter analysisInfoFilter,
                                      2: i64 limit,
