@@ -18,15 +18,49 @@
           <v-icon>mdi-close</v-icon>
         </v-btn>
       </v-card-title>
+
       <v-card-text>
         <v-container class="pa-0 pt-2">
           <!-- eslint-disable vue/no-v-html -->
           <div
-            v-for="cmd in analysisInfo"
+            v-for="cmd in analysisInfo.cmds"
             :key="cmd"
             class="analysis-info mb-2"
             v-html="cmd"
           />
+        </v-container>
+
+        <v-container class="pa-0 pt-2">
+          <v-expansion-panels
+            v-model="activeAnalyzerExpansionPanels"
+            multiple
+            hover
+          >
+            <v-expansion-panel
+              v-for="analyzer in analysisInfo.analyzerNames"
+              :key="analyzer"
+            >
+              <v-expansion-panel-header>
+                {{ analyzer }}
+              </v-expansion-panel-header>
+
+              <v-expansion-panel-content>
+                <v-container>
+                  <v-row>
+                    <ul>
+                      <li
+                        v-for="(checker, idx) in
+                          analysisInfo.checkerStatusPerAnalyzer[analyzer]"
+                        :key="idx"
+                      >
+                        {{ checker }}
+                      </li>
+                    </ul>
+                  </v-row>
+                </v-container>
+              </v-expansion-panel-content>
+            </v-expansion-panel>
+          </v-expansion-panels>
         </v-container>
       </v-card-text>
     </v-card>
@@ -48,7 +82,12 @@ export default {
 
   data() {
     return {
-      analysisInfo: [],
+      analysisInfo: {
+        cmds: [],
+        analyzerNames: [],
+        checkerStatusPerAnalyzer: {}
+      },
+      activeAnalyzerExpansionPanels: [],
       enabledCheckerRgx: new RegExp("^(--enable|-e[= ]*)", "i"),
       disabledCheckerRgx: new RegExp("^(--disable|-d[= ]*)", "i"),
     };
@@ -62,6 +101,15 @@ export default {
       set(val) {
         this.$emit("update:value", val);
       }
+    },
+    analysisInfoCheckers(analyzer) {
+      const checkers = this.analysisInfo.checkers[analyzer];
+      if (!checkers) {
+        return [];
+      }
+      return Object.keys(checkers).
+        sort((a, b) => a.localeCompare(b)).
+        map(k => [ k, checkers[k] ]);
     }
   },
 
@@ -82,8 +130,12 @@ export default {
   },
 
   methods: {
-    highlightOptions(analysisInfo) {
-      const cmd = analysisInfo.analyzerCommand;
+    getAnalyzersSorted() {
+      return Object.keys(this.analysisInfo.checkers).sort((a, b) =>
+        a.localeCompare(b));
+    },
+
+    highlightOptions(cmd) {
       return cmd.split(" ").map(param => {
         if (!param.startsWith("-")) {
           return param;
@@ -104,6 +156,32 @@ export default {
       }).join(" ").replace(/(?:\r\n|\r|\n)/g, "<br>");
     },
 
+    reduceCheckerStatuses(accumulator, newInfo) {
+      for (const [ analyzer, checkers ] of Object.entries(newInfo)) {
+        if (!accumulator[analyzer]) {
+          accumulator[analyzer] = {};
+        }
+        for (const [ checker, checkerInfo ] of Object.entries(checkers)) {
+          accumulator[analyzer][checker] =
+            accumulator[analyzer][checker] || checkerInfo.enabled;
+        }
+      }
+
+      return accumulator;
+    },
+
+    storeSortedViewData(checkerStatuses) {
+      this.analysisInfo.analyzerNames = Object.keys(checkerStatuses).sort();
+      this.analysisInfo.checkerStatusPerAnalyzer =
+        Object.fromEntries(Object.keys(checkerStatuses).map(
+          analyzer => [ analyzer,
+            Object.keys(checkerStatuses[analyzer]).sort().map(
+              checker => [ checker, checkerStatuses[analyzer][checker] ]
+            )
+          ]
+        ));
+    },
+
     getAnalysisInfo() {
       if (
         !this.dialog ||
@@ -111,8 +189,6 @@ export default {
       ) {
         return;
       }
-
-      this.analysisInfo = [];
 
       const analysisInfoFilter = new AnalysisInfoFilter({
         runId: this.runId,
@@ -124,8 +200,12 @@ export default {
       const offset = 0;
       ccService.getClient().getAnalysisInfo(analysisInfoFilter, limit,
         offset, handleThriftError(analysisInfo => {
-          this.analysisInfo = analysisInfo.map(cmd =>
-            this.highlightOptions(cmd));
+          this.analysisInfo.cmds = analysisInfo.map(ai =>
+            this.highlightOptions(ai.analyzerCommand));
+
+          const checkerStatuses = analysisInfo.map(ai => ai.checkers).
+            reduce(this.reduceCheckerStatuses, {});
+          this.storeSortedViewData(checkerStatuses);
         }));
     }
   }
