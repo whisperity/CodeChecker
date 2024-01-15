@@ -38,6 +38,7 @@ def upgrade():
     db = Session(bind=conn)
 
     def upgrade_analysis_info():
+        return None
         # Upgrade the contents of the existing columns in AnalysisInfo to the
         # new ZLibCompressed format.
         #
@@ -232,7 +233,7 @@ def upgrade():
 
             ac.alter_column("checker_id", nullable=False)
 
-    upgrade_analysis_info()
+    # upgrade_analysis_info()
     create_new_tables()
     report_count, checkers_to_reports, checkers_to_ids = \
         get_and_add_checkers_from_reports()
@@ -248,6 +249,7 @@ def downgrade():
     db = Session(bind=conn)
 
     def downgrade_analysis_info():
+        return None
         # Downgrade AnalysisInfo to use raw BLOBs instead of the typed and
         # tagged ZLibCompressedString feature. The actual type of the Column
         # needs no modification, only the values.
@@ -388,7 +390,7 @@ def downgrade():
         op.drop_table("analysis_info_checkers")
         op.drop_table("checkers")
 
-    downgrade_analysis_info()
+    # downgrade_analysis_info()
     report_count, checkers_to_reports, checkers_to_severity = \
         get_checkers_and_associated_reports()
     downgrade_report_table_columns(report_count > 0)

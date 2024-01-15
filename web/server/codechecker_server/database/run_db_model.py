@@ -85,10 +85,10 @@ class AnalysisInfo(Base):
     __tablename__ = "analysis_info"
 
     id = Column(Integer, autoincrement=True, primary_key=True)
-    analyzer_command = Column(ZLibCompressedString)
+    analyzer_command = Column(LargeBinary)
     available_checkers = relationship(AnalysisInfoChecker, uselist=True)
 
-    def __init__(self, analyzer_command: str):
+    def __init__(self, analyzer_command: bytes):
         self.analyzer_command = analyzer_command
 
 
