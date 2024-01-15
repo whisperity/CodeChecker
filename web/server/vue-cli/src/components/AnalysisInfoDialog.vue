@@ -36,13 +36,32 @@
             hover
           >
             <v-expansion-panel
-              v-for="analyzer in analysisInfo.analyzerNames"
+              v-for="analyzer in analysisInfo.analyzers"
               :key="analyzer"
             >
               <v-expansion-panel-header
                 class="pa-0 px-1 primary--text font-weight-black"
               >
-                {{ analyzer }}
+                <v-row
+                  no-gutters
+                  align="center"
+                >
+                  <v-col cols="auto">
+                    {{ analyzer }}
+                  </v-col>
+                  <v-col cols="auto">
+                    <count-chips
+                      :num-good="analysisInfo.counts[analyzer]['__TOTAL__'][0]"
+                      :num-bad="analysisInfo.counts[analyzer]['__TOTAL__'][1]"
+                      :num-total="analysisInfo.counts[analyzer]['__TOTAL__'][2]"
+                      :simplify-showing-if-all="true"
+                      :show-total="true"
+                      :show-dividers="false"
+                      :show-zero-chips="false"
+                      class="pl-2"
+                    />
+                  </v-col>
+                </v-row>
               </v-expansion-panel-header>
 
               <v-expansion-panel-content
@@ -56,6 +75,7 @@
                     :key="group"
                     :group="group"
                     :checkers="checkers"
+                    :counts="analysisInfo.counts[analyzer][group]"
                   />
                   <analysis-info-checker-rows
                     v-else
@@ -73,18 +93,20 @@
 </template>
 
 <script>
-import { ccService, handleThriftError } from "@cc-api";
 import {
   AnalysisInfoCheckerGroupPanel,
   AnalysisInfoCheckerRows
 } from "@/components/AnalysisInfo";
+import CountChips from "@/components/CountChips";
+import { ccService, handleThriftError } from "@cc-api";
 import { AnalysisInfoFilter } from "@cc/report-server-types";
 
 export default {
   name: "AnalysisInfoDialog",
   components: {
     AnalysisInfoCheckerGroupPanel,
-    AnalysisInfoCheckerRows
+    AnalysisInfoCheckerRows,
+    CountChips
   },
   props: {
     value: { type: Boolean, default: false },
@@ -97,8 +119,9 @@ export default {
     return {
       analysisInfo: {
         cmds: [],
-        analyzerNames: [],
-        checkers: {}
+        analyzers: [],
+        checkers: {},
+        checkerCounts: {}
       },
       enabledCheckerRgx: new RegExp("^(--enable|-e[= ]*)", "i"),
       disabledCheckerRgx: new RegExp("^(--disable|-d[= ]*)", "i"),
@@ -114,15 +137,6 @@ export default {
         this.$emit("update:value", val);
       }
     },
-    analysisInfoCheckers(analyzer) {
-      const checkers = this.analysisInfo.checkers[analyzer];
-      if (!checkers) {
-        return [];
-      }
-      return Object.keys(checkers).
-        sort((a, b) => a.localeCompare(b)).
-        map(k => [ k, checkers[k] ]);
-    }
   },
 
   watch: {
@@ -217,7 +231,7 @@ export default {
     },
 
     storeSortedViewData(checkerStatuses) {
-      this.analysisInfo.analyzerNames = Object.keys(checkerStatuses).sort();
+      this.analysisInfo.analyzers = Object.keys(checkerStatuses).sort();
       this.analysisInfo.checkers =
         Object.fromEntries(Object.keys(checkerStatuses).map(
           analyzer => [ analyzer,
@@ -234,6 +248,46 @@ export default {
             )
           ]
         ));
+
+      this.analysisInfo.counts =
+        Object.fromEntries(Object.keys(checkerStatuses).map(
+          analyzer => [ analyzer,
+            Object.fromEntries(
+              Object.keys(checkerStatuses[analyzer]).map(
+                group => [ group,
+                  [
+                    // [0]: Enabled checkers.
+                    Object.keys(checkerStatuses[analyzer][group])
+                      .map(checker =>
+                        checkerStatuses[analyzer][group][checker] ? 1 : 0)
+                      .reduce((a, b) => a + b, 0),
+                    // [1]: Disabled checkers (will be updated later).
+                    -1,
+                    // [2]: Total checkers.
+                    Object.keys(checkerStatuses[analyzer][group]).length
+                  ]
+                ]
+              )
+            )
+          ]
+        ));
+      const counts = this.analysisInfo.counts;
+      Object.keys(counts).map(
+        analyzer => Object.keys(counts[analyzer]).map(
+          group => {
+            counts[analyzer][group][1] =
+              counts[analyzer][group][2] - counts[analyzer][group][0];
+          }));
+      Object.keys(counts).map(
+        analyzer => {
+          const sum = Object.values(counts[analyzer])
+            .reduce((a, b) => [
+              a[0] + b[0],
+              a[1] + b[1],
+              a[2] + b[2]
+            ]);
+          counts[analyzer]["__TOTAL__"] = sum;
+        });
     },
 
     getAnalysisInfo() {
@@ -288,10 +342,6 @@ export default {
 
   .ctu, .statistics {
     background-color: rgba(0, 0, 142, 0.15);
-  }
-
-  .checker-columns {
-    columns: 32em auto;
   }
 }
 </style>

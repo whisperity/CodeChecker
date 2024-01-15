@@ -1,5 +1,8 @@
 <template>
-  <v-row no-gutters>
+  <v-row
+    no-gutters
+    align="center"
+  >
     <v-col
       cols="auto"
     >
