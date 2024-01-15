@@ -30,7 +30,7 @@
           />
         </v-container>
 
-        <v-container class="pa-0 pt-2">
+        <v-container class="pa-0 pt-1">
           <v-expansion-panels
             v-model="activeAnalyzerExpansionPanels"
             multiple
@@ -40,22 +40,37 @@
               v-for="analyzer in analysisInfo.analyzerNames"
               :key="analyzer"
             >
-              <v-expansion-panel-header>
+              <v-expansion-panel-header
+                class="pa-0 px-1 primary--text font-weight-black"
+              >
                 {{ analyzer }}
               </v-expansion-panel-header>
 
-              <v-expansion-panel-content>
-                <v-container>
-                  <v-row>
-                    <ul>
-                      <li
-                        v-for="(checker, idx) in
-                          analysisInfo.checkerStatusPerAnalyzer[analyzer]"
-                        :key="idx"
-                      >
-                        {{ checker }}
-                      </li>
-                    </ul>
+              <v-expansion-panel-content
+                class="pa-1"
+              >
+                <v-container
+                  class="checker-columns"
+                >
+                  <v-row
+                    v-for="(checker, idx) in
+                      analysisInfo.checkerStatusPerAnalyzer[analyzer]"
+                    :key="idx"
+                    no-gutters
+                  >
+                    <v-col
+                      cols="auto"
+                    >
+                      <analyzer-statistics-icon
+                        class="mr-2"
+                        :value="checker[1]"
+                      />
+                    </v-col>
+                    <v-col
+                      class="pr-1"
+                    >
+                      {{ checker[0] }}
+                    </v-col>
                   </v-row>
                 </v-container>
               </v-expansion-panel-content>
@@ -69,10 +84,14 @@
 
 <script>
 import { ccService, handleThriftError } from "@cc-api";
+import { AnalyzerStatisticsIcon } from "@/components/Icons";
 import { AnalysisInfoFilter } from "@cc/report-server-types";
 
 export default {
   name: "AnalysisInfoDialog",
+  components: {
+    AnalyzerStatisticsIcon
+  },
   props: {
     value: { type: Boolean, default: false },
     runId: { type: Object, default: () => null },
@@ -176,10 +195,16 @@ export default {
         Object.fromEntries(Object.keys(checkerStatuses).map(
           analyzer => [ analyzer,
             Object.keys(checkerStatuses[analyzer]).sort().map(
-              checker => [ checker, checkerStatuses[analyzer][checker] ]
+              checker => [ checker,
+                (checkerStatuses[analyzer][checker]) ? "successful" : "failed"
+              ]
             )
           ]
         ));
+
+      this.activeAnalyzerExpansionPanels = [ ...Array(
+        Object.keys(checkerStatuses).length).keys() ];
+      console.log(this.activeAnalyzerExpansionPanels);
     },
 
     getAnalysisInfo() {
@@ -234,6 +259,10 @@ export default {
 
   .ctu, .statistics {
     background-color: rgba(0, 0, 142, 0.15);
+  }
+
+  .checker-columns {
+    columns: 32em auto;
   }
 }
 </style>
