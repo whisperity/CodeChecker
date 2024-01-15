@@ -40,13 +40,16 @@
               :key="analyzer"
             >
               <v-expansion-panel-header
-                class="pa-0 px-1 primary--text font-weight-black"
+                class="pa-0 px-1"
               >
                 <v-row
                   no-gutters
                   align="center"
                 >
-                  <v-col cols="auto">
+                  <v-col
+                    cols="auto"
+                    class="pa-1 analyzer-name primary--text"
+                  >
                     {{ analyzer }}
                   </v-col>
                   <v-col cols="auto">
@@ -54,6 +57,9 @@
                       :num-good="analysisInfo.counts[analyzer]['__TOTAL__'][0]"
                       :num-bad="analysisInfo.counts[analyzer]['__TOTAL__'][1]"
                       :num-total="analysisInfo.counts[analyzer]['__TOTAL__'][2]"
+                      :good-text="'Number of checkers enabled (executed)'"
+                      :bad-text="'Number of checkers disabled (not executed)'"
+                      :total-text="'Number of checkers available'"
                       :simplify-showing-if-all="true"
                       :show-total="true"
                       :show-dividers="false"
@@ -241,13 +247,10 @@ export default {
                   Object.keys(checkerStatuses[analyzer][group]).sort().map(
                     checker => [ checker,
                       checkerStatuses[analyzer][group][checker]
-                    ]
-                  )
-                ]
-              )
+                    ])
+                ])
             )
-          ]
-        ));
+          ]));
 
       this.analysisInfo.counts =
         Object.fromEntries(Object.keys(checkerStatuses).map(
@@ -266,11 +269,8 @@ export default {
                     // [2]: Total checkers.
                     Object.keys(checkerStatuses[analyzer][group]).length
                   ]
-                ]
-              )
-            )
-          ]
-        ));
+                ]))
+          ]));
       const counts = this.analysisInfo.counts;
       Object.keys(counts).map(
         analyzer => Object.keys(counts[analyzer]).map(
@@ -342,6 +342,11 @@ export default {
 
   .ctu, .statistics {
     background-color: rgba(0, 0, 142, 0.15);
+  }
+
+  .analyzer-name {
+    font-size: 125%;
+    font-weight: bold;
   }
 }
 </style>

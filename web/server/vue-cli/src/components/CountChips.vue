@@ -10,6 +10,7 @@
         v-if="showingGood"
         color="success"
         :ripple="false"
+        :title="goodText"
         outlined
         dark
         small
@@ -35,6 +36,7 @@
         v-if="showingBad"
         color="error"
         :ripple="false"
+        :title="badText"
         outlined
         dark
         small
@@ -59,6 +61,7 @@
         v-if="showingTotal"
         color="grey lighten-1"
         :ripple="false"
+        :title="totalText"
         elevated
         small
       >
@@ -87,6 +90,9 @@ export default {
     numGood: { type: Number, required: true },
     numBad: { type: Number, default: 0 },
     numTotal: { type: Number, default: 0 },
+    goodText: { type: String, default: "" },
+    badText: { type: String, default: "" },
+    totalText: { type: String, default: "" },
     showDividers: { type: Boolean, default: true },
     showZeroChips: { type: Boolean, default: false },
     showTotal: { type: Boolean, default: false },
