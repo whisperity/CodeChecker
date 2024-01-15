@@ -153,28 +153,6 @@ def upgrade():
 
         return count, checkers_to_reports, checkers_to_ids
 
-    def upgrade_reports(count: int, checkers_to_reports, checkers_to_ids):
-        if count:
-            LOG.info("Preparing to upgrade %d 'reports'...", count)
-            done_report_count = 0
-            for chk in sorted(checkers_to_reports.keys()):
-                report_id_list = checkers_to_reports[chk]
-                chk_id = checkers_to_ids[chk]
-
-                conn.execute(f"""
-                    UPDATE reports
-                    SET
-                        checker_id = {chk_id}
-                    WHERE id IN ({','.join(map(str, report_id_list))});
-                """)
-
-                done_report_count += len(report_id_list)
-                LOG.info("[%d/%d] Upgrading 'reports'... "
-                         "'%s/%s' (%d), %.2f%% done.",
-                         done_report_count, count, chk[0], chk[1],
-                         len(report_id_list),
-                         (done_report_count * 100.0 / count))
-
     def upgrade_reports_table_columns(has_any_reports: bool):
         # Upgrade the 'reports' table to use the 'checkers' foreign look-up
         # instead of containing the strings allocated locally with the record.
@@ -207,6 +185,28 @@ def upgrade():
 
         if has_any_reports:
             LOG.info("Done upgrading 'reports' table structure.")
+
+    def upgrade_reports(count: int, checkers_to_reports, checkers_to_ids):
+        if count:
+            LOG.info("Preparing to upgrade %d 'reports'...", count)
+            done_report_count = 0
+            for chk in sorted(checkers_to_reports.keys()):
+                report_id_list = checkers_to_reports[chk]
+                chk_id = checkers_to_ids[chk]
+
+                conn.execute(f"""
+                    UPDATE reports
+                    SET
+                        checker_id = {chk_id}
+                    WHERE id IN ({','.join(map(str, report_id_list))});
+                """)
+
+                done_report_count += len(report_id_list)
+                LOG.info("[%d/%d] Upgrading 'reports'... "
+                         "'%s/%s' (%d), %.2f%% done.",
+                         done_report_count, count, chk[0], chk[1],
+                         len(report_id_list),
+                         (done_report_count * 100.0 / count))
 
     def upgrade_reports_table_constraints():
         ix_reports_checker_id = {
