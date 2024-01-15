@@ -32,7 +32,6 @@
 
         <v-container class="pa-0 pt-1">
           <v-expansion-panels
-            v-model="activeAnalyzerExpansionPanels"
             multiple
             hover
           >
@@ -49,30 +48,21 @@
               <v-expansion-panel-content
                 class="pa-1"
               >
-                <v-container
-                  class="checker-columns"
+                <template
+                  v-for="(checkers, group) in analysisInfo.checkers[analyzer]"
                 >
-                  <v-row
-                    v-for="(checker, idx) in
-                      analysisInfo.checkerStatusPerAnalyzer[analyzer]"
-                    :key="idx"
-                    no-gutters
-                  >
-                    <v-col
-                      cols="auto"
-                    >
-                      <analyzer-statistics-icon
-                        class="mr-2"
-                        :value="checker[1]"
-                      />
-                    </v-col>
-                    <v-col
-                      class="pr-1"
-                    >
-                      {{ checker[0] }}
-                    </v-col>
-                  </v-row>
-                </v-container>
+                  <analysis-info-checker-group-panel
+                    v-if="group !== '__NULL__'"
+                    :key="group"
+                    :group="group"
+                    :checkers="checkers"
+                  />
+                  <analysis-info-checker-rows
+                    v-else
+                    :key="group"
+                    :checkers="checkers"
+                  />
+                </template>
               </v-expansion-panel-content>
             </v-expansion-panel>
           </v-expansion-panels>
@@ -84,13 +74,17 @@
 
 <script>
 import { ccService, handleThriftError } from "@cc-api";
-import { AnalyzerStatisticsIcon } from "@/components/Icons";
+import {
+  AnalysisInfoCheckerGroupPanel,
+  AnalysisInfoCheckerRows
+} from "@/components/AnalysisInfo";
 import { AnalysisInfoFilter } from "@cc/report-server-types";
 
 export default {
   name: "AnalysisInfoDialog",
   components: {
-    AnalyzerStatisticsIcon
+    AnalysisInfoCheckerGroupPanel,
+    AnalysisInfoCheckerRows
   },
   props: {
     value: { type: Boolean, default: false },
@@ -104,9 +98,8 @@ export default {
       analysisInfo: {
         cmds: [],
         analyzerNames: [],
-        checkerStatusPerAnalyzer: {}
+        checkers: {}
       },
-      activeAnalyzerExpansionPanels: [],
       enabledCheckerRgx: new RegExp("^(--enable|-e[= ]*)", "i"),
       disabledCheckerRgx: new RegExp("^(--disable|-d[= ]*)", "i"),
     };
@@ -175,14 +168,48 @@ export default {
       }).join(" ").replace(/(?:\r\n|\r|\n)/g, "<br>");
     },
 
+    getTopLevelCheckGroup(analyzerName, checkerName) {
+      const clangTidyClangDiagnostic = checkerName.split("clang-diagnostic-");
+      if (clangTidyClangDiagnostic.length > 1 &&
+        clangTidyClangDiagnostic[0] === "")
+      {
+        // Unfortunately, this is historically special...
+        return "clang-diagnostic";
+      }
+
+      const splitDot = checkerName.split(".");
+      if (splitDot.length > 1) {
+        return splitDot[0];
+      }
+
+      const splitHyphen = checkerName.split("-");
+      if (splitHyphen.length > 1) {
+        if (splitHyphen[0] === analyzerName) {
+          // cppcheck-PointerSize -> "__NULL__"
+          // gcc-fd-leak          -> "fd"
+          return splitHyphen.length >= 3 ? splitHyphen[1] : "__NULL__";
+        }
+        // bugprone-easily-swappable-parameters -> "bugprone"
+        return splitHyphen[0];
+      }
+
+      return "__NULL__";
+    },
+
     reduceCheckerStatuses(accumulator, newInfo) {
       for (const [ analyzer, checkers ] of Object.entries(newInfo)) {
         if (!accumulator[analyzer]) {
-          accumulator[analyzer] = {};
+          accumulator[analyzer] = {
+            "__NULL__": {}
+          };
         }
         for (const [ checker, checkerInfo ] of Object.entries(checkers)) {
-          accumulator[analyzer][checker] =
-            accumulator[analyzer][checker] || checkerInfo.enabled;
+          const group = this.getTopLevelCheckGroup(analyzer, checker);
+          if (!accumulator[analyzer][group]) {
+            accumulator[analyzer][group] = {};
+          }
+          accumulator[analyzer][group][checker] =
+            accumulator[analyzer][group][checker] || checkerInfo.enabled;
         }
       }
 
@@ -191,20 +218,22 @@ export default {
 
     storeSortedViewData(checkerStatuses) {
       this.analysisInfo.analyzerNames = Object.keys(checkerStatuses).sort();
-      this.analysisInfo.checkerStatusPerAnalyzer =
+      this.analysisInfo.checkers =
         Object.fromEntries(Object.keys(checkerStatuses).map(
           analyzer => [ analyzer,
-            Object.keys(checkerStatuses[analyzer]).sort().map(
-              checker => [ checker,
-                (checkerStatuses[analyzer][checker]) ? "successful" : "failed"
-              ]
+            Object.fromEntries(
+              Object.keys(checkerStatuses[analyzer]).sort().map(
+                group => [ group,
+                  Object.keys(checkerStatuses[analyzer][group]).sort().map(
+                    checker => [ checker,
+                      checkerStatuses[analyzer][group][checker]
+                    ]
+                  )
+                ]
+              )
             )
           ]
         ));
-
-      this.activeAnalyzerExpansionPanels = [ ...Array(
-        Object.keys(checkerStatuses).length).keys() ];
-      console.log(this.activeAnalyzerExpansionPanels);
     },
 
     getAnalysisInfo() {
