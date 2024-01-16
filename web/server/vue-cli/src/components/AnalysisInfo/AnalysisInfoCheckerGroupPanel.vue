@@ -16,7 +16,7 @@
               (needDetailedCounts ? ' partially' :
                 (groupEnabled ? '' : ' not')
               ) +
-              ' enabled in this analysis.'"
+              ' enabled in this analysis'"
             outlined
             dark
             small

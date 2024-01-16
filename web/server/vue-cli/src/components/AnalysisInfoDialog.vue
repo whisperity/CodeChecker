@@ -54,9 +54,12 @@
                   </v-col>
                   <v-col cols="auto">
                     <count-chips
-                      :num-good="analysisInfo.counts[analyzer]['__TOTAL__'][0]"
-                      :num-bad="analysisInfo.counts[analyzer]['__TOTAL__'][1]"
-                      :num-total="analysisInfo.counts[analyzer]['__TOTAL__'][2]"
+                      :num-good="analysisInfo.counts[analyzer]
+                        [groupMeta.AnalyzerTotal][countMeta.Enabled]"
+                      :num-bad="analysisInfo.counts[analyzer]
+                        [groupMeta.AnalyzerTotal][countMeta.Disabled]"
+                      :num-total="analysisInfo.counts[analyzer]
+                        [groupMeta.AnalyzerTotal][countMeta.Total]"
                       :good-text="'Number of checkers enabled (executed)'"
                       :bad-text="'Number of checkers disabled (not executed)'"
                       :total-text="'Number of checkers available'"
@@ -77,7 +80,7 @@
                   v-for="(checkers, group) in analysisInfo.checkers[analyzer]"
                 >
                   <analysis-info-checker-group-panel
-                    v-if="group !== '__NULL__'"
+                    v-if="group !== groupMeta.NoGroup"
                     :key="group"
                     :group="group"
                     :checkers="checkers"
@@ -107,6 +110,9 @@ import CountChips from "@/components/CountChips";
 import { ccService, handleThriftError } from "@cc-api";
 import { AnalysisInfoFilter } from "@cc/report-server-types";
 
+const GroupMeta = Object.freeze({ NoGroup: "__N", AnalyzerTotal: "__S" });
+const CountMeta = Object.freeze({ Enabled: 0, Disabled: 1, Total: 2 });
+
 export default {
   name: "AnalysisInfoDialog",
   components: {
@@ -130,7 +136,7 @@ export default {
         checkerCounts: {}
       },
       enabledCheckerRgx: new RegExp("^(--enable|-e[= ]*)", "i"),
-      disabledCheckerRgx: new RegExp("^(--disable|-d[= ]*)", "i"),
+      disabledCheckerRgx: new RegExp("^(--disable|-d[= ]*)", "i")
     };
   },
 
@@ -143,6 +149,12 @@ export default {
         this.$emit("update:value", val);
       }
     },
+    groupMeta() {
+      return GroupMeta;
+    },
+    countMeta() {
+      return CountMeta;
+    }
   },
 
   watch: {
@@ -162,11 +174,6 @@ export default {
   },
 
   methods: {
-    getAnalyzersSorted() {
-      return Object.keys(this.analysisInfo.checkers).sort((a, b) =>
-        a.localeCompare(b));
-    },
-
     highlightOptions(cmd) {
       return cmd.split(" ").map(param => {
         if (!param.startsWith("-")) {
@@ -205,23 +212,22 @@ export default {
       const splitHyphen = checkerName.split("-");
       if (splitHyphen.length > 1) {
         if (splitHyphen[0] === analyzerName) {
-          // cppcheck-PointerSize -> "__NULL__"
+          // cppcheck-PointerSize -> <NoGroup>
           // gcc-fd-leak          -> "fd"
-          return splitHyphen.length >= 3 ? splitHyphen[1] : "__NULL__";
+          return splitHyphen.length >= 3 ? splitHyphen[1] : GroupMeta.NoGroup;
         }
         // bugprone-easily-swappable-parameters -> "bugprone"
         return splitHyphen[0];
       }
 
-      return "__NULL__";
+      return GroupMeta.NoGroup;
     },
 
     reduceCheckerStatuses(accumulator, newInfo) {
       for (const [ analyzer, checkers ] of Object.entries(newInfo)) {
         if (!accumulator[analyzer]) {
-          accumulator[analyzer] = {
-            "__NULL__": {}
-          };
+          accumulator[analyzer] = {};
+          accumulator[analyzer][GroupMeta.NoGroup] = {};
         }
         for (const [ checker, checkerInfo ] of Object.entries(checkers)) {
           const group = this.getTopLevelCheckGroup(analyzer, checker);
@@ -236,7 +242,7 @@ export default {
       return accumulator;
     },
 
-    storeSortedViewData(checkerStatuses) {
+    sortAndStoreCheckerInfo(checkerStatuses) {
       this.analysisInfo.analyzers = Object.keys(checkerStatuses).sort();
       this.analysisInfo.checkers =
         Object.fromEntries(Object.keys(checkerStatuses).map(
@@ -259,14 +265,14 @@ export default {
               Object.keys(checkerStatuses[analyzer]).map(
                 group => [ group,
                   [
-                    // [0]: Enabled checkers.
+                    // [0]: #[Enabled checkers]
                     Object.keys(checkerStatuses[analyzer][group])
                       .map(checker =>
                         checkerStatuses[analyzer][group][checker] ? 1 : 0)
                       .reduce((a, b) => a + b, 0),
-                    // [1]: Disabled checkers (will be updated later).
+                    // [1]: #[Disabled checkers] (Note: will be updated later)
                     -1,
-                    // [2]: Total checkers.
+                    // [2]: #[Total checkers]
                     Object.keys(checkerStatuses[analyzer][group]).length
                   ]
                 ]))
@@ -275,18 +281,19 @@ export default {
       Object.keys(counts).map(
         analyzer => Object.keys(counts[analyzer]).map(
           group => {
-            counts[analyzer][group][1] =
-              counts[analyzer][group][2] - counts[analyzer][group][0];
+            counts[analyzer][group][CountMeta.Disabled] =
+              counts[analyzer][group][CountMeta.Total] -
+              counts[analyzer][group][CountMeta.Enabled];
           }));
       Object.keys(counts).map(
         analyzer => {
           const sum = Object.values(counts[analyzer])
-            .reduce((a, b) => [
-              a[0] + b[0],
-              a[1] + b[1],
-              a[2] + b[2]
+            .reduce((as, bs) => [
+              as[CountMeta.Enabled]  + bs[CountMeta.Enabled],
+              as[CountMeta.Disabled] + bs[CountMeta.Disabled],
+              as[CountMeta.Total]    + bs[CountMeta.Total],
             ]);
-          counts[analyzer]["__TOTAL__"] = sum;
+          counts[analyzer][GroupMeta.AnalyzerTotal] = sum;
         });
     },
 
@@ -313,7 +320,12 @@ export default {
 
           const checkerStatuses = analysisInfo.map(ai => ai.checkers).
             reduce(this.reduceCheckerStatuses, {});
-          this.storeSortedViewData(checkerStatuses);
+          if (!Object.keys(checkerStatuses).length) {
+            this.sortAndStoreCheckerInfo({}); // Reset.
+            console.warn("No result!");
+          } else {
+            this.sortAndStoreCheckerInfo(checkerStatuses);
+          }
         }));
     }
   }
