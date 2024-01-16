@@ -26,7 +26,7 @@
 import { AnalyzerStatisticsIcon } from "@/components/Icons";
 
 export default {
-  name: "AnalysisInfoCheckerRow",
+  name: "Checker",
   components: {
     AnalyzerStatisticsIcon
   },

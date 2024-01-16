@@ -30,72 +30,121 @@
           />
         </v-container>
 
-        <v-container class="pa-0 pt-1">
-          <v-expansion-panels
-            multiple
-            hover
-          >
-            <v-expansion-panel
-              v-for="analyzer in analysisInfo.analyzers"
-              :key="analyzer"
+        <div
+          v-if="analysisInfo.checkerInfoAvailable ===
+            CheckerInfoAvailability.Normal"
+        >
+          <v-container class="pa-0 pt-1">
+            <v-expansion-panels
+              multiple
+              hover
             >
-              <v-expansion-panel-header
-                class="pa-0 px-1"
+              <v-expansion-panel
+                v-for="analyzer in analysisInfo.analyzers"
+                :key="analyzer"
               >
-                <v-row
-                  no-gutters
-                  align="center"
+                <v-expansion-panel-header
+                  class="pa-0 px-1"
                 >
-                  <v-col
-                    cols="auto"
-                    class="pa-1 analyzer-name primary--text"
+                  <v-row
+                    no-gutters
+                    align="center"
                   >
-                    {{ analyzer }}
-                  </v-col>
-                  <v-col cols="auto">
-                    <count-chips
-                      :num-good="analysisInfo.counts[analyzer]
-                        [groupMeta.AnalyzerTotal][countMeta.Enabled]"
-                      :num-bad="analysisInfo.counts[analyzer]
-                        [groupMeta.AnalyzerTotal][countMeta.Disabled]"
-                      :num-total="analysisInfo.counts[analyzer]
-                        [groupMeta.AnalyzerTotal][countMeta.Total]"
-                      :good-text="'Number of checkers enabled (executed)'"
-                      :bad-text="'Number of checkers disabled (not executed)'"
-                      :total-text="'Number of checkers available'"
-                      :simplify-showing-if-all="true"
-                      :show-total="true"
-                      :show-dividers="false"
-                      :show-zero-chips="false"
-                      class="pl-2"
-                    />
-                  </v-col>
-                </v-row>
-              </v-expansion-panel-header>
+                    <v-col
+                      cols="auto"
+                      class="pa-1 analyzer-name primary--text"
+                    >
+                      {{ analyzer }}
+                    </v-col>
+                    <v-col cols="auto">
+                      <count-chips
+                        class="pl-2"
+                        :num-good="analysisInfo.counts[analyzer]
+                          [groupMeta.AnalyzerTotal][countMeta.Enabled]"
+                        :num-bad="analysisInfo.counts[analyzer]
+                          [groupMeta.AnalyzerTotal][countMeta.Disabled]"
+                        :num-total="analysisInfo.counts[analyzer]
+                          [groupMeta.AnalyzerTotal][countMeta.Total]"
+                        :good-text="'Number of checkers enabled (executed)'"
+                        :bad-text="'Number of checkers disabled' +
+                          '(not executed)'"
+                        :total-text="'Number of checkers available'"
+                        :simplify-showing-if-all="true"
+                        :show-total="true"
+                        :show-dividers="false"
+                        :show-zero-chips="false"
+                      />
+                    </v-col>
+                  </v-row>
+                </v-expansion-panel-header>
 
-              <v-expansion-panel-content
-                class="pa-1"
-              >
-                <template
-                  v-for="(checkers, group) in analysisInfo.checkers[analyzer]"
+                <v-expansion-panel-content
+                  class="pa-1"
                 >
-                  <analysis-info-checker-group-panel
-                    v-if="group !== groupMeta.NoGroup"
-                    :key="group"
-                    :group="group"
-                    :checkers="checkers"
-                    :counts="analysisInfo.counts[analyzer][group]"
-                  />
-                  <analysis-info-checker-rows
-                    v-else
-                    :key="group"
-                    :checkers="checkers"
-                  />
-                </template>
-              </v-expansion-panel-content>
-            </v-expansion-panel>
-          </v-expansion-panels>
-        </v-container>
+                  <template
+                    v-for="(checkers, group) in
+                      analysisInfo.checkers[analyzer]"
+                  >
+                    <checker-group
+                      v-if="group !== groupMeta.NoGroup"
+                      :key="group"
+                      :group="group"
+                      :checkers="checkers"
+                      :counts="analysisInfo.counts[analyzer][group]"
+                    />
+                    <checker-rows
+                      v-else
+                      :key="group"
+                      :checkers="checkers"
+                    />
+                  </template>
+                </v-expansion-panel-content>
+              </v-expansion-panel>
+            </v-expansion-panels>
+          </v-container>
+        </div>
+        <div
+          v-else
+        >
+          <v-alert
+            icon="mdi-alert"
+            class="mt-2"
+            color="deep-orange"
+            outlined
+          >
+            <span
+              v-if="analysisInfo.checkerInfoAvailable ===
+                CheckerInfoAvailability.UnknownReason"
+            >
+              The list of checkers executed during the analysis is not
+              available!<br>
+              This is likely caused by storing a run from a report directory
+              which was not created natively by
+              <span class="top-level-command">CodeChecker analyze</span>.
+              Using the
+              <span
+                class="top-level-command font-italic"
+              >report-converter</span>
+              on the results of third-party analysers can cause this, as it
+              prevents CodeChecker from knowing about the analysis
+              configuration.
+            </span>
+            <span
+              v-else-if="analysisInfo.checkerInfoAvailable ===
+                CheckerInfoAvailability.VersionTooLow"
+            >
+              The list of checkers executed during the analysis is only
+              available from CodeChecker version
+              <span class="version font-weight-bold">6.24</span>.<br>
+              The analysis was executed using an older,
+              <span class="version">{{
+                analysisInfo.codeCheckerVersion
+              }}</span>
+              client, and it was also <span class="font-italic">likely</span>
+              stored when the server ran this older version.
+            </span>
+          </v-alert>
+        </div>
       </v-card-text>
     </v-card>
   </v-dialog>
@@ -103,23 +152,35 @@
 
 <script>
 import {
-  AnalysisInfoCheckerGroupPanel,
-  AnalysisInfoCheckerRows
+  CheckerGroup,
+  CheckerRows
 } from "@/components/AnalysisInfo";
 import CountChips from "@/components/CountChips";
 import { ccService, handleThriftError } from "@cc-api";
-import { AnalysisInfoFilter } from "@cc/report-server-types";
+import {
+  AnalysisInfoFilter,
+  RunFilter,
+  RunHistoryFilter
+} from "@cc/report-server-types";
+import { VersionMixin } from "@/mixins";
 
 const GroupMeta = Object.freeze({ NoGroup: "__N", AnalyzerTotal: "__S" });
 const CountMeta = Object.freeze({ Enabled: 0, Disabled: 1, Total: 2 });
+const CheckerInfoAvailability = Object.freeze({
+  Normal: 0,
+  Unloaded: 1,
+  UnknownReason: 2,
+  VersionTooLow: 3
+});
 
 export default {
   name: "AnalysisInfoDialog",
   components: {
-    AnalysisInfoCheckerGroupPanel,
-    AnalysisInfoCheckerRows,
+    CheckerGroup,
+    CheckerRows,
     CountChips
   },
+  mixins: [ VersionMixin ],
   props: {
     value: { type: Boolean, default: false },
     runId: { type: Object, default: () => null },
@@ -132,8 +193,10 @@ export default {
       analysisInfo: {
         cmds: [],
         analyzers: [],
+        checkerInfoAvailable: CheckerInfoAvailability.Unloaded,
+        codeCheckerVersion: "0",
         checkers: {},
-        checkerCounts: {}
+        checkerCounts: {},
       },
       enabledCheckerRgx: new RegExp("^(--enable|-e[= ]*)", "i"),
       disabledCheckerRgx: new RegExp("^(--disable|-d[= ]*)", "i")
@@ -154,6 +217,9 @@ export default {
     },
     countMeta() {
       return CountMeta;
+    },
+    CheckerInfoAvailability() {
+      return CheckerInfoAvailability;
     }
   },
 
@@ -297,6 +363,52 @@ export default {
         });
     },
 
+    checkerStatusUnavailableDueToVersion(version) {
+      const normalized = this.prettifyCCVersion(version);
+      if (!normalized) return false;
+      this.analysisInfo.codeCheckerVersion = normalized;
+
+      if (this.isNewerOrEqualCCVersion(normalized, "6.24")) return false;
+      this.analysisInfo.checkerInfoAvailable =
+        CheckerInfoAvailability.VersionTooLow;
+      return true;
+    },
+
+    decideWhyCheckerStatusesUnavailable() {
+      if (!this.runId && !this.runHistoryId && !this.reportId) {
+        return;
+      }
+
+      if (this.runId && !this.runHistoryId) {
+        const filter = new RunFilter({
+          ids: [ this.runId ]
+        });
+        ccService.getClient().getRunData(filter, null, null, null,
+          handleThriftError(runDataList => {
+            if (runDataList.length !== 1) return;
+            this.checkerStatusUnavailableDueToVersion(
+              runDataList[0].codeCheckerVersion);
+          }));
+      } else if (this.runId && this.runHistoryId) {
+        const filter = new RunHistoryFilter({
+          tagNames: [],
+          tagIds: [ this.runHistoryId ]
+        });
+        ccService.getClient().getRunHistory([ this.runId ], 1, 0, filter,
+          handleThriftError(runHistoryDataList => {
+            if (runHistoryDataList.length !== 1) return;
+            this.checkerStatusUnavailableDueToVersion(
+              runHistoryDataList[0].codeCheckerVersion);
+          }));
+      }
+
+      if (this.analysisInfo.checkerInfoAvailable !==
+        CheckerInfoAvailability.UnknownReason) {
+        // It was decided that the version is the reason.
+        return;
+      }
+    },
+
     getAnalysisInfo() {
       if (
         !this.dialog ||
@@ -306,10 +418,15 @@ export default {
       }
 
       const analysisInfoFilter = new AnalysisInfoFilter({
-        runId: this.runId,
+        // Query a run's analysis info only if a run history ID is not explicit.
+        runId: (!this.runHistoryId ? this.runId : null),
         runHistoryId: this.runHistoryId,
         reportId: this.reportId,
       });
+
+      console.warn(analysisInfoFilter);
+      this.analysisInfo.checkerInfoAvailable =
+        CheckerInfoAvailability.Unloaded;
 
       const limit = null;
       const offset = 0;
@@ -321,10 +438,15 @@ export default {
           const checkerStatuses = analysisInfo.map(ai => ai.checkers).
             reduce(this.reduceCheckerStatuses, {});
           if (!Object.keys(checkerStatuses).length) {
-            this.sortAndStoreCheckerInfo({}); // Reset.
-            console.warn("No result!");
+            this.sortAndStoreCheckerInfo({}); // Zero the calculated data out.
+            this.analysisInfo.checkerInfoAvailable =
+              CheckerInfoAvailability.UnknownReason;
+
+            this.decideWhyCheckerStatusesUnavailable();
           } else {
             this.sortAndStoreCheckerInfo(checkerStatuses);
+            this.analysisInfo.checkerInfoAvailable =
+              CheckerInfoAvailability.Normal;
           }
         }));
     }
@@ -359,6 +481,11 @@ export default {
   .analyzer-name {
     font-size: 125%;
     font-weight: bold;
+  }
+
+  .version, .top-level-command {
+    font-family: monospace;
+    font-size: smaller;
   }
 }
 </style>

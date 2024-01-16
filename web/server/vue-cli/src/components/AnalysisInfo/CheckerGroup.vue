@@ -66,7 +66,7 @@
       </v-row>
     </v-expansion-panel-header>
     <v-expansion-panel-content>
-      <analysis-info-checker-rows
+      <checker-rows
         :checkers="checkers"
       />
     </v-expansion-panel-content>
@@ -75,12 +75,12 @@
 
 <script>
 import CountChips from "@/components/CountChips";
-import AnalysisInfoCheckerRows from "./AnalysisInfoCheckerRows";
+import CheckerRows from "./CheckerRows";
 
 export default {
-  name: "AnalysisInfoCheckerGroupPanel",
+  name: "CheckerGroup",
   components: {
-    AnalysisInfoCheckerRows,
+    CheckerRows,
     CountChips,
   },
   props: {

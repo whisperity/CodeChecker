@@ -1,9 +1,9 @@
-import AnalysisInfoCheckerGroupPanel from "./AnalysisInfoCheckerGroupPanel";
-import AnalysisInfoCheckerRow from "./AnalysisInfoCheckerRow";
-import AnalysisInfoCheckerRows from "./AnalysisInfoCheckerRows";
+import Checker from "./Checker";
+import CheckerGroup from "./CheckerGroup";
+import CheckerRows from "./CheckerRows";
 
 export {
-  AnalysisInfoCheckerGroupPanel,
-  AnalysisInfoCheckerRow,
-  AnalysisInfoCheckerRows
+  Checker,
+  CheckerGroup,
+  CheckerRows
 };
