@@ -1581,7 +1581,7 @@ class ThriftRequestHandler:
                             enabled=enabled)
 
                     res.append(ttypes.AnalysisInfo(
-                        analyzerCommand=html.escape(cmd.analyzer_command.decode('utf-8')),
+                        analyzerCommand=html.escape(cmd.analyzer_command),
                         checkers=checkers))
 
         return res

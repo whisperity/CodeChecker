@@ -721,7 +721,7 @@ class MassStoreRun:
                     analysis_info = analysis_info_rows[0]
                 else:
                     analysis_info = AnalysisInfo(
-                        analyzer_command=analyzer_command.encode('utf-8'))
+                        analyzer_command=analyzer_command)
 
                     # Obtain the ID eagerly to be able to use the M-to-N table.
                     session.add(analysis_info)
