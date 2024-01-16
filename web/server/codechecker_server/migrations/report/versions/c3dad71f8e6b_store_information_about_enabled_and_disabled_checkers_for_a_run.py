@@ -59,6 +59,8 @@ def upgrade():
             for analysis_info in progress(db.query(AnalysisInfo).all(), count,
                                           100 // 5,
                                           callback=_print_progress):
+                if analysis_info.analyzer_command is None:
+                    continue
                 _, new_analyzer_command = recompress_zlib_as_tagged_exact_ratio(
                     analysis_info.analyzer_command)
                 db.query(AnalysisInfo) \
@@ -266,6 +268,8 @@ def downgrade():
             for analysis_info in progress(db.query(AnalysisInfo).all(), count,
                                           100 // 5,
                                           callback=_print_progress):
+                if analysis_info.analyzer_command is None:
+                    continue
                 old_analyzer_command = recompress_zlib_as_untagged(
                     analysis_info.analyzer_command)
                 db.query(AnalysisInfo) \
