@@ -34,7 +34,6 @@ def upgrade():
     LOG = getLogger("migration")
     dialect = op.get_context().dialect.name
     conn = op.get_bind()
-    db = Session(bind=conn)
 
     def upgrade_analysis_info():
         # Upgrade the contents of the existing columns in AnalysisInfo to the
@@ -48,6 +47,7 @@ def upgrade():
         # 'analysis_info' is the table!
         AnalysisInfo = Base.classes.analysis_info
 
+        db = Session(bind=conn)
         count = db.query(AnalysisInfo).count()
         if count:
             def _print_progress(index: int, percent: float):
@@ -103,7 +103,24 @@ def upgrade():
                                     name=op.f("pk_analysis_info_checkers"))
         )
 
-    def get_and_add_checkers_from_reports():
+    def add_new_checker_id_column():
+        # Upgrade the 'reports' table to use the 'checkers' foreign look-up
+        # instead of containing the strings allocated locally with the record.
+        col_reports_checker_id = sa.Column("checker_id", sa.Integer(),
+                                           nullable=False, server_default="0")
+
+        if dialect == "sqlite":
+            with op.batch_alter_table("reports", recreate="never") as ba:
+                ba.alter_column("checker_id", new_column_name="checker_name")
+            # Due to the rename reusing the previous name, these can't merge.
+            with op.batch_alter_table("reports", recreate="never") as ba:
+                ba.add_column(col_reports_checker_id)
+        else:
+            op.alter_column("reports", "checker_id",
+                            new_column_name="checker_name")
+            op.add_column("reports", col_reports_checker_id)
+
+    def add_checkers():
         # Pre-allocate IDs in the look-up table for all checkers that were
         # encountered according to the currently present reports in the DB.
         Base = automap_base()
@@ -111,109 +128,131 @@ def upgrade():
         Report = Base.classes.reports  # 'reports' is the table name!
         Checker = Base.classes.checkers
 
+        db = Session(bind=conn)
         db.add(Checker(analyzer_name="__FAKE__",
                        checker_name="__FAKE__",
                        severity=0))
         db.add(Checker(analyzer_name="UNKNOWN",
                        checker_name="NOT FOUND",
                        severity=0))
-        db.commit()
 
         count = db.query(Report).count()
-        checkers_to_reports: Dict[Tuple[str, str], List[int]] = dict()
-        checkers_to_ids: Dict[Tuple[str, str], int] = dict()
         checkers_to_severity: Dict[Tuple[str, str], int] = dict()
         if count:
             def _print_progress(index: int, percent: float):
                 LOG.info("[%d/%d] Gathering checkers from 'reports'... "
                          "%.0f%% done. %d checkers found.",
-                         index, count, percent, len(checkers_to_reports))
+                         index, count, percent, len(checkers_to_severity))
 
-            LOG.info("Preparing to pre-fill 'checkers'...")
-            LOG.info("Preparing to gather checkers from %d 'reports'...",
+            LOG.info("Preparing to fill 'checkers' from %d 'reports'...",
                      count)
-            for report in progress(db.query(Report).all(), count,
+            for report in progress(db.query(Report), count,
                                    100 // 5,
                                    callback=_print_progress):
-                chk = (report.analyzer_name, report.checker_id)
-                reps = checkers_to_reports.get(chk, list())
-                reps.append(report.id)
-                checkers_to_reports[chk] = reps
+                chk = (report.analyzer_name, report.checker_name)
                 checkers_to_severity[chk] = report.severity
 
-            for chk in sorted(checkers_to_reports.keys()):
+            for chk in sorted(checkers_to_severity.keys()):
                 obj = Checker(analyzer_name=chk[0], checker_name=chk[1],
                               severity=checkers_to_severity[chk])
                 db.add(obj)
-                db.flush()
-                db.refresh(obj, ["id"])
-                checkers_to_ids[chk] = obj.id
 
             db.commit()
-            LOG.info("Done pre-filling 'checkers'.")
+            LOG.info("Done filling 'checkers'.")
 
-        return count, checkers_to_reports, checkers_to_ids
+    def upgrade_reports():
+        LOG.info("Linking 'reports' to 'checkers'...")
+        conn.execute(f"""
+            UPDATE reports
+            SET
+                checker_id = (
+                    SELECT checkers.id
+                    FROM checkers
+                    WHERE checkers.analyzer_name == reports.analyzer_name
+                        AND checkers.checker_name == reports.checker_name
+                )
+            ;
+        """)
 
-    def upgrade_reports_table_columns(has_any_reports: bool):
-        # Upgrade the 'reports' table to use the 'checkers' foreign look-up
-        # instead of containing the strings allocated locally with the record.
-        col_reports_checker_id = sa.Column("checker_id", sa.Integer(),
-                                           nullable=True)
-
-        if has_any_reports:
-            LOG.info("Upgrading 'reports' table structure...")
-            if dialect == "sqlite":
-                LOG.warning("On SQLite databases, column changes require the "
-                            "creation of a new temporary table. If you have "
-                            "many reports, this might take a while...")
-
-        if dialect == "sqlite":
-            op.execute("PRAGMA foreign_keys=OFF;")
-
-        with op.batch_alter_table("reports",
-                                  recreate="always" if dialect == "sqlite"
-                                           else "auto") as ba:
-            ba.drop_column("checker_id")
-            # These columns are deleted as this data is now available through
-            # the 'checkers' lookup-table.
-            ba.drop_column("analyzer_name")
-            ba.drop_column("severity")
-
-            # These columns are dropped because they rarely contained any
-            # meaningful data with new informational value, and their contents
-            # were never actually exposed on the API.
-            ba.drop_column("checker_cat")
-            ba.drop_column("bug_type")
-
-            ba.add_column(col_reports_checker_id, insert_after="bug_id")
+    def drop_reports_table_columns():
+        LOG.info("Dropping unneeded 'reports' columns...")
 
         if dialect == "sqlite":
-            op.execute("PRAGMA foreign_keys=ON;")
+            op.execute("PRAGMA foreign_keys=OFF")
 
-        if has_any_reports:
-            LOG.info("Done upgrading 'reports' table structure.")
+            with op.batch_alter_table("reports", recreate="never") as ba:
+                # FIXME: Allowing recreate="auto" (the default) here would
+                # result in SQLAlchemy creating a new 'reports' table, which
+                # will break the database as the incoming constraints
+                # FOREIGN KEYing against 'reports' will essentially TRUNCATE
+                # due to the ON DELETE CASCADE markers, e.g., in
+                # 'bug_path_events'. This manifests as the Python-based database
+                # cleanup routine essentially wiping all reports off the
+                # database, following this migration.
+                #
+                # Until SQLite 3.35.0 is widely available (Ubuntu 22.04, see
+                # also dabc6998b8f0_analysis_info_table.py), we side-step the
+                # current problem with a simple rename. However, in general,
+                # this is always bound to get bad, and a real solution is only
+                # expectable from a **significant**, ground-up redesign of both
+                # the database and the migration logic, and our processes.
+                # (E.g., if we always assumed migrations can trash the database
+                # because there are always back-ups, the whole problem with
+                # "SQLite + transaction + pragma = no-op" would not be here.)
+                #
+                # It generally appears that the big issue here is the fact that
+                # migration scripts execute as part of a TRANSACTION! As such,
+                # the "PRAGMA foreign_keys=OFF" is useless. See the docs at
+                #     http://sqlite.org/foreignkeys.html (quoted Jan 16, 2024)
+                #
+                # > It is not possible to enable or disable foreign key
+                # > constraints in the middle of a multi-statement transaction
+                # > (when SQLite is not in autocommit mode). Attempting to do
+                # > so does not return an error; it simply has no effect.
+                #
+                # This means that the foreign keys are still enabled, and when
+                # the migration commits, 'bug_path_events' and
+                # 'bug_report_points' **WILL** TRUNCATE themselves as the batch
+                # operation executed a "DROP TABLE reports;". These claims can
+                # be re-verified later by executing the following steps:
+                #   1. Change the database manually and set the incoming
+                #      foreign keys to "ON DELETE RESTRICT" instead of "CASCADE".
+                #   2. Run the migration. An exception will come from this
+                #      context but will refer to an internal "DROP TABLE" stmt.
+                #   3. Add an op.execute("COMMIT") before the PRAGMA call above.
+                #   4. Re-run the migration and observe everything is good and
+                #      there was no data loss whatsoever!
 
-    def upgrade_reports(count: int, checkers_to_reports, checkers_to_ids):
-        if count:
-            LOG.info("Preparing to upgrade %d 'reports'...", count)
-            done_report_count = 0
-            for chk in sorted(checkers_to_reports.keys()):
-                report_id_list = checkers_to_reports[chk]
-                chk_id = checkers_to_ids[chk]
+                # ba.drop_column("checker_name")
+                ba.alter_column("checker_name",
+                                new_column_name="checker_name_moved_to_checkers")
 
-                conn.execute(f"""
-                    UPDATE reports
-                    SET
-                        checker_id = {chk_id}
-                    WHERE id IN ({','.join(map(str, report_id_list))});
-                """)
+                # These columns are deleted as this data is now available
+                # through the 'checkers' lookup-table.
+                # ba.drop_column("analyzer_name")
+                # ba.drop_column("severity")
+                ba.alter_column("analyzer_name",
+                                new_column_name="analyzer_name_moved_to_checkers")
+                ba.alter_column("severity",
+                                new_column_name="severity_moved_to_checkers")
 
-                done_report_count += len(report_id_list)
-                LOG.info("[%d/%d] Upgrading 'reports'... "
-                         "'%s/%s' (%d), %.2f%% done.",
-                         done_report_count, count, chk[0], chk[1],
-                         len(report_id_list),
-                         (done_report_count * 100.0 / count))
+                # These columns are dropped because they rarely contained any
+                # meaningful data with new informational value, and their
+                # contents were never actually exposed on the API.
+                # ba.drop_column("checker_cat")
+                # ba.drop_column("bug_type")
+                ba.alter_column("checker_cat",
+                                new_column_name="checker_cat_UNUSED")
+                ba.alter_column("bug_type",
+                                new_column_name="bug_type_UNUSED")
+
+            op.execute("PRAGMA foreign_keys=ON")
+        else:
+            op.drop_column("reports", "checker_name")
+            op.drop_column("reports", "analyzer_name")
+            op.drop_column("reports", "severity")
+            op.drop_column("reports", "checker_cat")
+            op.drop_column("reports", "bug_type")
 
     def upgrade_reports_table_constraints():
         ix_reports_checker_id = {
@@ -230,25 +269,31 @@ def upgrade():
             "ondelete": "RESTRICT"
         }
         if dialect == "sqlite":
-            op.execute("PRAGMA foreign_keys=OFF;")
+            op.execute("PRAGMA foreign_keys=OFF")
 
-        with op.batch_alter_table("reports") as ba:
-            # Now that the values are filled, ensure that the constriants are
-            # appropriately enforced.
-            ba.create_index(**ix_reports_checker_id)
-            ba.create_foreign_key(**fk_reports_checker_id)
+            with op.batch_alter_table("reports", recreate="never") as ba:
+                # Now that the values are filled, ensure that the constriants
+                # are appropriately enforced.
+                ba.create_index(**ix_reports_checker_id)
+                # This should really be a FOREIGN KEY, but it is not possible
+                # without recreating the entire table, which breaks other
+                # FOREIGN KEYs.
+                # ba.create_foreign_key(**fk_reports_checker_id)
 
-            ba.alter_column("checker_id", nullable=False)
-
-        if dialect == "sqlite":
-            op.execute("PRAGMA foreign_keys=ON;")
+            op.execute("PRAGMA foreign_keys=ON")
+        else:
+            op.create_index(table_name="reports", **ix_reports_checker_id)
+            op.create_foreign_key(constraint_table="reports",
+                                  **fk_reports_checker_id)
+            op.alter_column("reports", "checker_id", nullable=False,
+                            server_default=None)
 
     upgrade_analysis_info()
     create_new_tables()
-    report_count, checkers_to_reports, checkers_to_ids = \
-        get_and_add_checkers_from_reports()
-    upgrade_reports_table_columns(report_count > 0)
-    upgrade_reports(report_count, checkers_to_reports, checkers_to_ids)
+    add_new_checker_id_column()
+    add_checkers()
+    upgrade_reports()
+    drop_reports_table_columns()
     upgrade_reports_table_constraints()
 
 
@@ -256,7 +301,6 @@ def downgrade():
     LOG = getLogger("migration")
     dialect = op.get_context().dialect.name
     conn = op.get_bind()
-    db = Session(bind=conn)
 
     def downgrade_analysis_info():
         # Downgrade AnalysisInfo to use raw BLOBs instead of the typed and
@@ -264,9 +308,10 @@ def downgrade():
         # needs no modification, only the values.
         Base = automap_base()
         Base.prepare(conn, reflect=True)
-
         # 'analysis_info' is the table!
         AnalysisInfo = Base.classes.analysis_info
+
+        db = Session(bind=conn)
         count = db.query(AnalysisInfo).count()
         if count:
             def _print_progress(index: int, percent: float):
@@ -288,44 +333,7 @@ def downgrade():
             LOG.info("Done downgrading 'analysis_info'.")
             db.commit()
 
-    def get_checkers_and_associated_reports():
-        Base = automap_base()
-        Base.prepare(conn, reflect=True)
-
-        # Revert the introduction of a lookup table to identify checkers,
-        # back-inserting the relevant information to the 'reports' table.
-        Report = Base.classes.reports  # 'reports' is the table name!
-        Checker = Base.classes.checkers
-
-        count = db.query(Report).count()
-        checker_count = db.query(Checker).count()
-        ids_to_checkers: Dict[int, Tuple[str, str]] = dict()
-        checkers_to_reports: Dict[Tuple[str, str], List[int]] = dict()
-        checkers_to_severity: Dict[Tuple[str, str], int] = dict()
-        if count and checker_count:
-            def _print_progress(index: int, percent: float):
-                LOG.info("[%d/%d] Collecting checker names from 'reports'... "
-                         "%.0f%% done.",
-                         index, count, percent)
-
-            LOG.info("Preparing to backfill %d 'checkers' into %d "
-                     "'reports'...", checker_count, count)
-            for chk in db.query(Checker).all():
-                chk_name = (chk.analyzer_name, chk.checker_name)
-                ids_to_checkers[chk.id] = chk_name
-                checkers_to_severity[chk_name] = chk.severity
-
-            for report in progress(db.query(Report).all(), count,
-                                   100 // 5,
-                                   callback=_print_progress):
-                chk = ids_to_checkers[report.checker_id]
-                reps = checkers_to_reports.get(chk, list())
-                reps.append(report.id)
-                checkers_to_reports[chk] = reps
-
-        return count, checkers_to_reports, checkers_to_severity
-
-    def downgrade_report_table_columns(has_any_reports: bool):
+    def restore_report_columns():
         col_reports_analyzer_name = sa.Column("analyzer_name",
                                               sa.String(), nullable=False,
                                               server_default="unknown")
@@ -334,82 +342,104 @@ def downgrade():
         col_reports_bug_type = sa.Column("bug_type", sa.String())
         col_reports_severity = sa.Column("severity", sa.Integer())
 
-        if has_any_reports:
-            LOG.info("Downgrading 'reports' table structure...")
-            if dialect == "sqlite":
-                LOG.warning("On SQLite databases, column changes require the "
-                            "creation of a new temporary table. If you have "
-                            "many reports, this might take a while...")
+        if dialect == "sqlite":
+            op.execute("PRAGMA foreign_keys=OFF")
+
+            with op.batch_alter_table("reports", recreate="never") as ba:
+                # Drop the column that was introduced in this revision.
+                ba.drop_constraint(
+                    op.f("fk_reports_checker_id_checkers"))
+                ba.drop_index(op.f("ix_reports_checker_id"))
+                ba.alter_column("checker_id",
+                                new_column_name="checker_id_lookup")
+
+            with op.batch_alter_table("reports", recreate="never") as ba:
+                # Restore the columns that were deleted in this revision.
+                # ba.add_column(col_reports_analyzer_name)
+                # ba.add_column(col_reports_checker_id)
+                # ba.add_column(col_reports_checker_cat)
+                # ba.add_column(col_reports_bug_type)
+                # ba.add_column(col_reports_severity)
+
+                # FIXME: Until SQLite 3.35 is available, we can actually
+                # restore the data!
+                ba.alter_column("analyzer_name_moved_to_checkers",
+                                new_column_name="analyzer_name")
+                ba.alter_column("checker_name_moved_to_checkers",
+                                new_column_name="checker_id")
+                ba.alter_column("severity_moved_to_checkers",
+                                new_column_name="severity")
+                ba.alter_column("checker_cat_UNUSED",
+                                new_column_name="checker_cat")
+                ba.alter_column("bug_type_UNUSED",
+                                new_column_name="bug_type")
+
+                op.execute("PRAGMA foreign_keys=ON")
+        else:
+            op.drop_constraint(of.f("fk_reports_checker_id_checkers"),
+                               "reports")
+            op.drop_index(op.f("ix_reports_checker_id"), "reports")
+            op.alter_column("reports", "checker_id",
+                            new_column_name="checker_id_lookup")
+
+            ba.add_column("reports", col_reports_analyzer_name)
+            ba.add_column("reports", col_reports_checker_id)
+            ba.add_column("reports", col_reports_checker_cat)
+            ba.add_column("reports", col_reports_bug_type)
+            ba.add_column("reports", col_reports_severity)
+
+        LOG.info("Restored type of columns 'reports.bug_type', "
+                 "'reports.checker_cat'. However, their contents can NOT "
+                 "be restored to the original values, as those were "
+                 "irrevocably lost during a previous schema upgrade. "
+                 "Note, that these columns NEVER contained any actual "
+                 "value that was accessible by users of the API, so "
+                 "this is a technical note.")
+
+    def downgrade_reports():
+        LOG.info("Unlinking 'reports' from 'checkers'...")
 
         if dialect == "sqlite":
-            op.execute("PRAGMA foreign_keys=OFF;")
+            conn.execute(f"""
+                UPDATE reports
+                SET
+                    (analyzer_name, checker_name, severity) =
+                    (SELECT analyzer_name, checker_name, severity
+                        FROM checkers
+                        WHERE checkers.id == reports.checker_id)
+                ;
+            """)
+        else:
+            conn.execute(f"""
+                UPDATE reports
+                SET
+                    analyzer_name = chk.analyzer_name,
+                    checker_name = chk.checker_name,
+                    severity = chk.severity
+                FROM checkers AS chk
+                WHERE chk.id == reports.checker_id
+                ;
+            """)
 
-        with op.batch_alter_table("reports",
-                                  recreate="always" if dialect == "sqlite"
-                                           else "auto") as ba:
-            # Drop the column that was introduced in this revision.
-            ba.drop_constraint(
-                op.f("fk_reports_checker_id_checkers"))
-            ba.drop_index(op.f("ix_reports_checker_id"))
-            ba.drop_column("checker_id")
-
-            # Restore the columns that were deleted in this revision.
-            ba.add_column(col_reports_analyzer_name, insert_after="bug_id")
-            ba.add_column(col_reports_checker_id, insert_after="analyzer_name")
-            ba.add_column(col_reports_checker_cat, insert_after="checker_id")
-            ba.add_column(col_reports_bug_type, insert_after="checker_cat")
-            ba.add_column(col_reports_severity, insert_after="bug_type")
-
-            LOG.info("Restored type of columns 'reports.bug_type', "
-                     "'reports.checker_cat'. However, their contents can NOT "
-                     "be restored to the original values, as those were "
-                     "irrevocably lost during a previous schema upgrade. "
-                     "Note, that these columns NEVER contained any actual "
-                     "value that was accessible by users of the API, so "
-                     "this is a technical note.")
-
+    def drop_checker_id_numeric_column():
         if dialect == "sqlite":
-            op.execute("PRAGMA foreign_keys=ON;")
-
-        if has_any_reports:
-            LOG.info("Done downgrading 'reports' table structure.")
-
-    def downgrade_reports(count: int,
-                          checkers_to_reports, checkers_to_severity):
-        if count:
-            LOG.info("Preparing to downgrade %d 'reports'...", count)
-            done_report_count = 0
-            for chk in sorted(checkers_to_reports.keys()):
-                report_id_list = checkers_to_reports[chk]
-
-                conn.execute(f"""
-                    UPDATE reports
-                    SET
-                        analyzer_name = '{chk[0]}',
-                        checker_id = '{chk[1]}',
-                        severity = {checkers_to_severity[chk]}
-                    WHERE id IN ({','.join(map(str, report_id_list))});
-                """)
-
-                done_report_count += len(report_id_list)
-                LOG.info("[%d/%d] Downgrading 'reports'... "
-                         "'%s/%s' (%d), %.2f%% done.",
-                         done_report_count, count, chk[0], chk[1],
-                         len(report_id_list),
-                         (done_report_count * 100.0 / count))
-            db.commit()
-            LOG.info("Done inserting 'checkers' back into 'reports'.")
+            with op.batch_alter_table("reports", recreate="never") as ba:
+                # FIXME: SQLite >= 3.35 will allow DROP COLUMN...
+                # ba.drop_column("checker_id_lookup")
+                ba.alter_column("checker_id_lookup",
+                                new_column_name="checker_id_fk_UNUSED")
+        else:
+            op.drop_column("reports", "checker_id_lookup")
 
     def drop_new_tables():
         # Drop all tables and columns that were created in this revision.
         # This data is not needed anymore.
-        op.drop_index(op.f("ix_checkers_severity"))
+        op.drop_index(op.f("ix_checkers_severity"), "checkers")
         op.drop_table("analysis_info_checkers")
         op.drop_table("checkers")
 
     downgrade_analysis_info()
-    report_count, checkers_to_reports, checkers_to_severity = \
-        get_checkers_and_associated_reports()
-    downgrade_report_table_columns(report_count > 0)
-    downgrade_reports(report_count, checkers_to_reports, checkers_to_severity)
+    restore_report_columns()
+    downgrade_reports()
+    drop_checker_id_numeric_column()
     drop_new_tables()

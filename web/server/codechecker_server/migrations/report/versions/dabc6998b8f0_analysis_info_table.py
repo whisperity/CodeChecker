@@ -96,7 +96,8 @@ def upgrade():
         # If data migration was successfully finished we can remove the
         # columns.
         if dialect == 'sqlite':
-            # Unfortunately removing columns in SQLite is not supported.
+            # Unfortunately removing columns in SQLite is not supported until
+            # version 3.35.0 (only Ubuntu 22.04's default version). Using the
             # 'batch_alter_table' function can be used to remove a column here (it
             # will create a new database) but it will clear the table which have
             # foreign keys with cascade delete property. Unfortunately disabling
