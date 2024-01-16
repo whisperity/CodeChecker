@@ -20,7 +20,6 @@ from io import StringIO
 
 from codechecker_common.source_code_comment_handler import \
     SourceCodeCommentHandler, SpellException
-from codechecker_server.migrations.common import AlterContext
 
 
 def upgrade():
@@ -47,21 +46,28 @@ def upgrade():
 
     conn = op.get_bind()
 
-    with AlterContext(op, "reports",
-                      disable_foreign_keys_during_operation=True) as ac:
-        ac.add_column(col_rs)
-        ac.add_column(col_rs_author)
-        ac.add_column(col_rs_date)
-        ac.add_column(col_rs_is_in_source)
-        ac.add_column(col_rs_message)
+    if dialect == 'sqlite':
+        op.execute('PRAGMA foreign_keys=off')
+        with op.batch_alter_table('reports') as batch_op:
+            batch_op.add_column(col_rs)
+            batch_op.add_column(col_rs_author)
+            batch_op.add_column(col_rs_date)
+            batch_op.add_column(col_rs_is_in_source)
+            batch_op.add_column(col_rs_message)
+        op.execute('PRAGMA foreign_keys=on')
 
-    if dialect == "sqlite":
         conn.execute("""
             UPDATE reports
             SET (review_status, review_status_author, review_status_date, review_status_message) =
                 (SELECT status, author, date, message FROM review_statuses WHERE bug_hash = reports.bug_id)
         """)
-    elif dialect == "postgresql":
+    elif dialect == 'postgresql':
+        op.add_column('reports', col_rs)
+        op.add_column('reports', col_rs_author)
+        op.add_column('reports', col_rs_date)
+        op.add_column('reports', col_rs_is_in_source)
+        op.add_column('reports', col_rs_message)
+
         conn.execute("""
             UPDATE reports
             SET review_status = rs.status,
