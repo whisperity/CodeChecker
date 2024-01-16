@@ -58,9 +58,11 @@ def remove_expired_run_locks(session_maker):
             locks_expired_at = datetime.now() - timedelta(
                 seconds=RUN_LOCK_TIMEOUT_IN_DATABASE)
 
-            session.query(RunLock) \
+            count = session.query(RunLock) \
                 .filter(RunLock.locked_at < locks_expired_at) \
                 .delete(synchronize_session=False)
+            if count:
+                LOG.debug("%d expired run locks deleted.", count)
 
             session.commit()
 
@@ -93,10 +95,16 @@ def remove_unused_files(session_maker):
                 .filter(File.id.notin_(bpe_files), File.id.notin_(brp_files))
             files_to_delete = map(lambda x: x[0], files_to_delete)
 
+            total_count = 0
             for chunk in util.chunks(iter(files_to_delete), CHUNK_SIZE):
-                session.query(File) \
-                    .filter(File.id.in_(chunk)) \
-                    .delete(synchronize_session=False)
+                q = session.query(File) \
+                    .filter(File.id.in_(chunk))
+                count = q.delete(synchronize_session=False)
+                if count:
+                    total_count += count
+
+            if total_count:
+                LOG.debug("%d dangling files deleted.", total_count)
 
             files = session.query(File.content_hash) \
                 .group_by(File.content_hash) \
@@ -123,9 +131,11 @@ def remove_unused_comments(session_maker):
                 .group_by(Report.bug_id) \
                 .subquery()
 
-            session.query(Comment) \
+            count = session.query(Comment) \
                 .filter(Comment.bug_hash.notin_(report_hashes)) \
                 .delete(synchronize_session=False)
+            if count:
+                LOG.debug("%d dangling comments deleted.", count)
 
             session.commit()
 
@@ -162,11 +172,18 @@ def remove_unused_analysis_info(session_maker):
 
             to_delete = map(lambda x: x[0], to_delete)
 
+            total_count = 0
             for chunk in util.chunks(to_delete, CHUNK_SIZE):
-                session.query(AnalysisInfo) \
+                count = session.query(AnalysisInfo) \
                     .filter(AnalysisInfo.id.in_(chunk)) \
                     .delete(synchronize_session=False)
-                session.commit()
+                if count:
+                    total_count += count
+
+            if total_count:
+                LOG.debug("%d dangling analysis info deleted.", total_count)
+
+            session.commit()
 
             LOG.debug("Garbage collection of dangling analysis info finished.")
         except (sqlalchemy.exc.OperationalError,
@@ -182,6 +199,7 @@ def upgrade_severity_levels(session_maker, checker_labels):
 
     with DBSession(session_maker) as session:
         try:
+            count = 0
             for analyzer in sorted(checker_labels.get_analyzers()):
                 checkers_for_analyzer_in_database = session \
                     .query(Checker.id,
@@ -210,8 +228,12 @@ def upgrade_severity_levels(session_maker, checker_labels):
                     session.query(Checker) \
                         .filter(Checker.id == checker_row.id) \
                         .update({Checker.severity: new_severity_db})
+                    count += 1
 
-                session.commit()
+            if count:
+                LOG.debug("%d checker severities upgraded.", count)
+
+            session.commit()
         except (sqlalchemy.exc.OperationalError,
                 sqlalchemy.exc.ProgrammingError) as ex:
             LOG.error("Failed to upgrade severity levels: %s", str(ex))
