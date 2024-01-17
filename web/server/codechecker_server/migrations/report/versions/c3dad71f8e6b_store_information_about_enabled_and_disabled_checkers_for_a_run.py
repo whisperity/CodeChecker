@@ -48,7 +48,7 @@ def upgrade():
         AnalysisInfo = Base.classes.analysis_info
 
         db = Session(bind=conn)
-        count = db.query(AnalysisInfo).count()
+        count = db.query(AnalysisInfo.id).count()
         if count:
             def _print_progress(index: int, percent: float):
                 LOG.info("[%d/%d] Upgrading 'analysis_info'... %.0f%% done.",
@@ -136,7 +136,7 @@ def upgrade():
                        checker_name="NOT FOUND",
                        severity=0))
 
-        count = db.query(Report).count()
+        count = db.query(Report.id).count()
         checkers_to_severity: Dict[Tuple[str, str], int] = dict()
         if count:
             def _print_progress(index: int, percent: float):
@@ -146,7 +146,9 @@ def upgrade():
 
             LOG.info("Preparing to fill 'checkers' from %d 'reports'...",
                      count)
-            for report in progress(db.query(Report), count,
+            for report in progress(db.query(Report.analyzer_name,
+                                            Report.checker_name,
+                                            Report.severity), count,
                                    100 // 5,
                                    callback=_print_progress):
                 chk = (report.analyzer_name, report.checker_name)
@@ -168,8 +170,8 @@ def upgrade():
                 checker_id = (
                     SELECT checkers.id
                     FROM checkers
-                    WHERE checkers.analyzer_name == reports.analyzer_name
-                        AND checkers.checker_name == reports.checker_name
+                    WHERE checkers.analyzer_name = reports.analyzer_name
+                        AND checkers.checker_name = reports.checker_name
                 )
             ;
         """)
@@ -283,7 +285,7 @@ def upgrade():
             op.execute("PRAGMA foreign_keys=ON")
         else:
             op.create_index(table_name="reports", **ix_reports_checker_id)
-            op.create_foreign_key(constraint_table="reports",
+            op.create_foreign_key(source_table="reports",
                                   **fk_reports_checker_id)
             op.alter_column("reports", "checker_id", nullable=False,
                             server_default=None)
@@ -312,7 +314,7 @@ def downgrade():
         AnalysisInfo = Base.classes.analysis_info
 
         db = Session(bind=conn)
-        count = db.query(AnalysisInfo).count()
+        count = db.query(AnalysisInfo.id).count()
         if count:
             def _print_progress(index: int, percent: float):
                 LOG.info("[%d/%d] Downgrading 'analysis_info'... %.0f%% done.",
@@ -406,7 +408,7 @@ def downgrade():
                     (analyzer_name, checker_name, severity) =
                     (SELECT analyzer_name, checker_name, severity
                         FROM checkers
-                        WHERE checkers.id == reports.checker_id)
+                        WHERE checkers.id = reports.checker_id)
                 ;
             """)
         else:
@@ -417,7 +419,7 @@ def downgrade():
                     checker_name = chk.checker_name,
                     severity = chk.severity
                 FROM checkers AS chk
-                WHERE chk.id == reports.checker_id
+                WHERE chk.id = reports.checker_id
                 ;
             """)
 
