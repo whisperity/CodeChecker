@@ -436,7 +436,6 @@ export default {
         reportId: this.reportId,
       });
 
-      console.warn(analysisInfoFilter);
       this.analysisInfo.checkerInfoAvailable =
         CheckerInfoAvailability.Unloaded;
 
