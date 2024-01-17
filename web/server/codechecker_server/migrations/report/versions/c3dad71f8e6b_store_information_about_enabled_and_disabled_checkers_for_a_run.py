@@ -227,16 +227,16 @@ def upgrade():
 
                 # ba.drop_column("checker_name")
                 ba.alter_column("checker_name",
-                                new_column_name="checker_name_moved_to_checkers")
+                                new_column_name="checker_name_MOVED_TO_checkers")
 
                 # These columns are deleted as this data is now available
                 # through the 'checkers' lookup-table.
                 # ba.drop_column("analyzer_name")
                 # ba.drop_column("severity")
                 ba.alter_column("analyzer_name",
-                                new_column_name="analyzer_name_moved_to_checkers")
+                                new_column_name="analyzer_name_MOVED_TO_checkers")
                 ba.alter_column("severity",
-                                new_column_name="severity_moved_to_checkers")
+                                new_column_name="severity_MOVED_TO_checkers")
 
                 # These columns are dropped because they rarely contained any
                 # meaningful data with new informational value, and their
@@ -278,8 +278,8 @@ def upgrade():
                 # are appropriately enforced.
                 ba.create_index(**ix_reports_checker_id)
                 # This should really be a FOREIGN KEY, but it is not possible
-                # without recreating the entire table, which breaks other
-                # FOREIGN KEYs.
+                # without recreating the entire 'reports' table, which breaks
+                # other FOREIGN KEYs.
                 # ba.create_foreign_key(**fk_reports_checker_id)
 
             op.execute("PRAGMA foreign_keys=ON")
@@ -363,11 +363,12 @@ def downgrade():
                 # ba.add_column(col_reports_bug_type)
                 # ba.add_column(col_reports_severity)
 
-                # FIXME: Until SQLite 3.35 is available, we can actually
-                # restore the data!
-                ba.alter_column("analyzer_name_moved_to_checkers",
+                # FIXME: Until SQLite 3.35 is available and we can actually
+                # delete columns without a table recreation, we can instead just
+                # restore the existing partial data!
+                ba.alter_column("analyzer_name_MOVED_TO_checkers",
                                 new_column_name="analyzer_name")
-                ba.alter_column("checker_name_moved_to_checkers",
+                ba.alter_column("checker_name_MOVED_TO_checkers",
                                 new_column_name="checker_id")
                 ba.alter_column("severity_moved_to_checkers",
                                 new_column_name="severity")
