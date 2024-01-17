@@ -143,6 +143,14 @@
               client, and it was also <span class="font-italic">likely</span>
               stored when the server ran this older version.
             </span>
+            <span
+              v-else-if="analysisInfo.checkerInfoAvailable ===
+                CheckerInfoAvailability.ReportIdToAnalysisInfoNotTrivialOverAPI"
+            >
+              The list of checkers executed during the analysis that produced
+              this <span class="font-italic">Report</span> is not
+              available!<br>
+            </span>
           </v-alert>
         </div>
       </v-card-text>
@@ -170,7 +178,8 @@ const CheckerInfoAvailability = Object.freeze({
   Normal: 0,
   Unloaded: 1,
   UnknownReason: 2,
-  VersionTooLow: 3
+  VersionTooLow: 3,
+  ReportIdToAnalysisInfoNotTrivialOverAPI: 4
 });
 
 export default {
@@ -400,6 +409,9 @@ export default {
             this.checkerStatusUnavailableDueToVersion(
               runHistoryDataList[0].codeCheckerVersion);
           }));
+      } else if (this.reportId) {
+        this.analysisInfo.checkerInfoAvailable = CheckerInfoAvailability.
+          ReportIdToAnalysisInfoNotTrivialOverAPI;
       }
 
       if (this.analysisInfo.checkerInfoAvailable !==
