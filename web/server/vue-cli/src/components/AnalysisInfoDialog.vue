@@ -60,11 +60,11 @@
                       <count-chips
                         class="pl-2"
                         :num-good="analysisInfo.counts[analyzer]
-                          [groupMeta.AnalyzerTotal][countMeta.Enabled]"
+                          [GroupMeta.AnalyzerTotal][CountMeta.Enabled]"
                         :num-bad="analysisInfo.counts[analyzer]
-                          [groupMeta.AnalyzerTotal][countMeta.Disabled]"
+                          [GroupMeta.AnalyzerTotal][CountMeta.Disabled]"
                         :num-total="analysisInfo.counts[analyzer]
-                          [groupMeta.AnalyzerTotal][countMeta.Total]"
+                          [GroupMeta.AnalyzerTotal][CountMeta.Total]"
                         :good-text="'Number of checkers enabled (executed)'"
                         :bad-text="'Number of checkers disabled' +
                           '(not executed)'"
@@ -86,7 +86,7 @@
                       analysisInfo.checkers[analyzer]"
                   >
                     <checker-group
-                      v-if="group !== groupMeta.NoGroup"
+                      v-if="group !== GroupMeta.NoGroup"
                       :key="group"
                       :group="group"
                       :checkers="checkers"
@@ -221,10 +221,10 @@ export default {
         this.$emit("update:value", val);
       }
     },
-    groupMeta() {
+    GroupMeta() {
       return GroupMeta;
     },
-    countMeta() {
+    CountMeta() {
       return CountMeta;
     },
     CheckerInfoAvailability() {
