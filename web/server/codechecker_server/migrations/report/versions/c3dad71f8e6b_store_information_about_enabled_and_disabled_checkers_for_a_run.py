@@ -450,15 +450,14 @@ def downgrade():
             conn.execute(f"""
                 UPDATE reports
                 SET
-                    (analyzer_name, checker_id, severity) =
-                    (SELECT analyzer_name, checker_name, severity
+                    (analyzer_name, checker_id, severity, checker_id_lookup) =
+                    (SELECT analyzer_name, checker_name, severity, '0'
                         FROM checkers
                         WHERE checkers.id = reports.checker_id_lookup)
                 WHERE reports.id IN (
                         SELECT reports.id
                         FROM reports
-                        WHERE reports.checker_id IS NULL
-                            OR reports.checker_id = ''
+                        WHERE reports.checker_id_lookup != 0
                         LIMIT {REPORT_UPDATE_CHUNK_SIZE}
                     )
                 ;
@@ -490,7 +489,7 @@ def downgrade():
                 # FIXME: SQLite >= 3.35 will allow DROP COLUMN...
                 # ba.drop_column("checker_id_lookup")
                 ba.alter_column("checker_id_lookup",
-                                new_column_name="checker_id_fk_UNUSED")
+                                new_column_name="checker_id_lookup_UNUSED")
         else:
             op.drop_column("reports", "checker_id_lookup")
 
