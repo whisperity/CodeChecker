@@ -52,26 +52,28 @@ def upgrade():
 
         db = Session(bind=conn)
         count = db.query(AnalysisInfo.id).count()
-        if count:
-            def _print_progress(index: int, percent: float):
-                LOG.info("[%d/%d] Upgrading 'analysis_info'... %.0f%% done.",
-                         index, count, percent)
+        if not count:
+            return
 
-            LOG.info("Preparing to upgrade %d 'analysis_info'...", count)
-            for analysis_info in progress(db.query(AnalysisInfo).all(), count,
-                                          100 // 5,
-                                          callback=_print_progress):
-                if analysis_info.analyzer_command is None:
-                    continue
-                _, new_analyzer_command = \
-                    recompress_zlib_as_tagged_exact_ratio(
-                        analysis_info.analyzer_command)
-                db.query(AnalysisInfo) \
-                    .filter(AnalysisInfo.id == analysis_info.id) \
-                    .update({"analyzer_command": new_analyzer_command},
-                            synchronize_session=False)
-            db.commit()
-            LOG.info("Done upgrading 'analysis_info'.")
+        def _print_progress(index: int, percent: float):
+            LOG.info("[%d/%d] Upgrading 'analysis_info'... %.0f%% done.",
+                     index, count, percent)
+
+        LOG.info("Preparing to upgrade %d 'analysis_info'...", count)
+        for analysis_info in progress(db.query(AnalysisInfo).all(), count,
+                                      100 // 5,
+                                      callback=_print_progress):
+            if analysis_info.analyzer_command is None:
+                continue
+            _, new_analyzer_command = \
+                recompress_zlib_as_tagged_exact_ratio(
+                    analysis_info.analyzer_command)
+            db.query(AnalysisInfo) \
+                .filter(AnalysisInfo.id == analysis_info.id) \
+                .update({"analyzer_command": new_analyzer_command},
+                        synchronize_session=False)
+        db.commit()
+        LOG.info("Done upgrading 'analysis_info'.")
 
     def create_new_tables():
         op.create_table(
@@ -145,46 +147,53 @@ def upgrade():
                        severity=0))
 
         count = db.query(Report.id).count()
+        if not count:
+            return
+
         checkers_to_severity: Dict[Tuple[str, str], int] = dict()
-        if count:
-            def _print_progress(index: int, percent: float):
-                LOG.info("[%d/%d] Gathering checkers from 'reports'... "
-                         "%.0f%% done. %d checkers found.",
-                         index, count, percent, len(checkers_to_severity))
 
-            LOG.info("Preparing to fill 'checkers' from %d 'reports'...",
-                     count)
-            for report in progress(db.query(Report.analyzer_name,
-                                            Report.checker_name,
-                                            Report.severity), count,
-                                   100 // 5,
-                                   callback=_print_progress):
-                chk = (report.analyzer_name, report.checker_name)
-                checkers_to_severity[chk] = report.severity
+        def _print_progress(index: int, percent: float):
+            LOG.info("[%d/%d] Gathering checkers from 'reports'... "
+                     "%.0f%% done. %d checkers found.",
+                     index, count, percent, len(checkers_to_severity))
 
-            for chk in sorted(checkers_to_severity.keys()):
-                obj = Checker(analyzer_name=chk[0], checker_name=chk[1],
-                              severity=checkers_to_severity[chk])
-                db.add(obj)
+        LOG.info("Preparing to fill 'checkers' from %d 'reports'...",
+                 count)
+        for report in progress(db.query(Report.analyzer_name,
+                                        Report.checker_name,
+                                        Report.severity), count,
+                               100 // 5,
+                               callback=_print_progress):
+            chk = (report.analyzer_name, report.checker_name)
+            checkers_to_severity[chk] = report.severity
 
-            db.commit()
-            LOG.info("Done filling 'checkers'.")
+        for chk in sorted(checkers_to_severity.keys()):
+            obj = Checker(analyzer_name=chk[0], checker_name=chk[1],
+                          severity=checkers_to_severity[chk])
+            db.add(obj)
+
+        db.commit()
+        LOG.info("Done filling 'checkers'.")
 
     def upgrade_reports():
-        report_count = conn.execute("SELECT COUNT(id) AS cnt FROM reports;") \
-            .scalar()
+        report_count = conn.execute("SELECT COUNT(id) FROM reports;").scalar()
         if not report_count:
             return
 
-        LOG.info("Linking %d 'reports' to 'checkers' in batches of %d...",
+        LOG.info("Upgrading %d 'reports' to refer 'checkers',"
+                 " in batches of %d...",
                  report_count, REPORT_UPDATE_CHUNK_SIZE)
-
         num_batches = report_count // REPORT_UPDATE_CHUNK_SIZE + 1
+
+        def _print_progress(batch: int):
+            LOG.info("[%d/%d] Upgrading 'reports'... (%d–%d) %.0f%% done.",
+                     batch, num_batches,
+                     (REPORT_UPDATE_CHUNK_SIZE * i) + 1,
+                     (REPORT_UPDATE_CHUNK_SIZE * (i + 1))
+                     if batch < num_batches else report_count,
+                     float(batch) / num_batches * 100)
+
         for i in range(0, num_batches):
-            LOG.debug("Upgrading 'reports'... batch %d/%d (reports %d – %d)",
-                      i + 1, num_batches,
-                      (REPORT_UPDATE_CHUNK_SIZE * i) + 1,
-                      (REPORT_UPDATE_CHUNK_SIZE * (i + 1)))
             conn.execute(f"""
                 UPDATE reports
                 SET
@@ -202,6 +211,7 @@ def upgrade():
                     )
                 ;
             """)
+            _print_progress(i + 1)
 
         LOG.info("Done upgrading 'reports'.")
 
@@ -347,25 +357,27 @@ def downgrade():
 
         db = Session(bind=conn)
         count = db.query(AnalysisInfo.id).count()
-        if count:
-            def _print_progress(index: int, percent: float):
-                LOG.info("[%d/%d] Downgrading 'analysis_info'... %.0f%% done.",
-                         index, count, percent)
+        if not count:
+            return
 
-            LOG.info("Preparing to downgrade %d 'analysis_info'...", count)
-            for analysis_info in progress(db.query(AnalysisInfo).all(), count,
-                                          100 // 5,
-                                          callback=_print_progress):
-                if analysis_info.analyzer_command is None:
-                    continue
-                old_analyzer_command = recompress_zlib_as_untagged(
-                    analysis_info.analyzer_command)
-                db.query(AnalysisInfo) \
-                    .filter(AnalysisInfo.id == analysis_info.id) \
-                    .update({"analyzer_command": old_analyzer_command},
-                            synchronize_session=False)
-            LOG.info("Done downgrading 'analysis_info'.")
-            db.commit()
+        def _print_progress(index: int, percent: float):
+            LOG.info("[%d/%d] Downgrading 'analysis_info'... %.0f%% done.",
+                     index, count, percent)
+
+        LOG.info("Preparing to downgrade %d 'analysis_info'...", count)
+        for analysis_info in progress(db.query(AnalysisInfo).all(), count,
+                                      100 // 5,
+                                      callback=_print_progress):
+            if analysis_info.analyzer_command is None:
+                continue
+            old_analyzer_command = recompress_zlib_as_untagged(
+                analysis_info.analyzer_command)
+            db.query(AnalysisInfo) \
+                .filter(AnalysisInfo.id == analysis_info.id) \
+                .update({"analyzer_command": old_analyzer_command},
+                        synchronize_session=False)
+        LOG.info("Done downgrading 'analysis_info'.")
+        db.commit()
 
     def restore_report_columns():
         col_reports_analyzer_name = sa.Column("analyzer_name",
@@ -432,54 +444,60 @@ def downgrade():
                  "this is a technical note.")
 
     def downgrade_reports():
-        report_count = conn.execute("SELECT COUNT(id) AS cnt FROM reports;") \
-            .scalar()
+        report_count = conn.execute("SELECT COUNT(id) FROM reports;").scalar()
         if not report_count:
             return
 
-        LOG.info("Unlinking %d 'reports' from 'checkers' in batches of %d...",
+        LOG.info("Downgrading %d 'reports' from 'checkers',"
+                 " in batches of %d...",
                  report_count, REPORT_UPDATE_CHUNK_SIZE)
-
         num_batches = report_count // REPORT_UPDATE_CHUNK_SIZE + 1
+
+        def _print_progress(batch: int):
+            LOG.info("[%d/%d] Downgrading 'reports'... (%d–%d) %.0f%% done.",
+                     batch, num_batches,
+                     (REPORT_UPDATE_CHUNK_SIZE * i) + 1,
+                     (REPORT_UPDATE_CHUNK_SIZE * (i + 1))
+                     if batch < num_batches else report_count,
+                     float(batch) / num_batches * 100)
+
         for i in range(0, num_batches):
-            LOG.debug("Downgrading 'reports'... batch %d/%d (reports %d – %d)",
-                      i + 1, num_batches,
-                      (REPORT_UPDATE_CHUNK_SIZE * i) + 1,
-                      (REPORT_UPDATE_CHUNK_SIZE * (i + 1)))
-        if dialect == "sqlite":
-            conn.execute(f"""
-                UPDATE reports
-                SET
-                    (analyzer_name, checker_id, severity, checker_id_lookup) =
-                    (SELECT analyzer_name, checker_name, severity, '0'
-                        FROM checkers
-                        WHERE checkers.id = reports.checker_id_lookup)
-                WHERE reports.id IN (
-                        SELECT reports.id
-                        FROM reports
-                        WHERE reports.checker_id_lookup != 0
-                        LIMIT {REPORT_UPDATE_CHUNK_SIZE}
-                    )
-                ;
-            """)
-        else:
-            conn.execute(f"""
-                UPDATE reports
-                SET
-                    analyzer_name = chk.analyzer_name,
-                    checker_id = chk.checker_name,
-                    severity = chk.severity,
-                    checker_id_lookup = 0
-                FROM checkers AS chk
-                WHERE chk.id = reports.checker_id_lookup
-                    AND reports.id IN (
-                        SELECT reports.id
-                        FROM reports
-                        WHERE reports.checker_id_lookup != 0
-                        LIMIT {REPORT_UPDATE_CHUNK_SIZE}
-                    )
-                ;
-            """)
+            if dialect == "sqlite":
+                conn.execute(f"""
+                    UPDATE reports
+                    SET
+                        (analyzer_name, checker_id, severity, checker_id_lookup) =
+                        (SELECT analyzer_name, checker_name, severity, '0'
+                            FROM checkers
+                            WHERE checkers.id = reports.checker_id_lookup)
+                    WHERE reports.id IN (
+                            SELECT reports.id
+                            FROM reports
+                            WHERE reports.checker_id_lookup != 0
+                            LIMIT {REPORT_UPDATE_CHUNK_SIZE}
+                        )
+                    ;
+                """)
+            else:
+                conn.execute(f"""
+                    UPDATE reports
+                    SET
+                        analyzer_name = chk.analyzer_name,
+                        checker_id = chk.checker_name,
+                        severity = chk.severity,
+                        checker_id_lookup = 0
+                    FROM checkers AS chk
+                    WHERE chk.id = reports.checker_id_lookup
+                        AND reports.id IN (
+                            SELECT reports.id
+                            FROM reports
+                            WHERE reports.checker_id_lookup != 0
+                            LIMIT {REPORT_UPDATE_CHUNK_SIZE}
+                        )
+                    ;
+                """)
+
+            _print_progress(i + 1)
 
         LOG.info("Done downgrading 'reports'.")
 
