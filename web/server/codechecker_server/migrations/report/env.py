@@ -55,21 +55,29 @@ def setup_logger():
     CodeChecker's wrapper, and ensure that the name of the logger created
     exactly matches "migration"!
     """
-    fmt = MigrationFormatter()
-    handler = logging.StreamHandler()
-    handler.setFormatter(fmt)
-    handler.setLevel(logging.INFO)
-    handler.setStream(sys.stdout)
+    sys_logger = logging.getLogger("system")
+    codechecker_loglvl = sys_logger.getEffectiveLevel()
+    if codechecker_loglvl >= logging.INFO:
+        # This might be 30 (WARNING) if the migration is run outside of
+        # CodeChecker's context, e.g., in a downgrade.
+        codechecker_loglvl = logging.INFO
 
-    # Use the default logging class that came with Python, temporarily turning
-    # away from potentially existing global changes.
+    # Use the default logging class that came with Python for the migration,
+    # temporarily turning away from potentially existing global changes.
     existing_logger_cls = logging.getLoggerClass()
     logging.setLoggerClass(logging.Logger)
     logger = logging.getLogger("migration")
     logging.setLoggerClass(existing_logger_cls)
 
-    logger.setLevel(logging.INFO)
-    logger.addHandler(handler)
+    if not logger.hasHandlers():
+        fmt = MigrationFormatter()
+        handler = logging.StreamHandler()
+        handler.setFormatter(fmt)
+        handler.setLevel(codechecker_loglvl)
+        handler.setStream(sys.stdout)
+
+        logger.setLevel(codechecker_loglvl)
+        logger.addHandler(handler)
 
 
 def run_migrations_offline():
