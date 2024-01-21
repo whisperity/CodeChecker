@@ -180,14 +180,20 @@ def upgrade():
         if not report_count:
             return
 
-        LOG.info("Linking %d 'reports' to 'checkers' in batches of %d...",
+        LOG.info("Upgrading %d 'reports' to refer 'checkers',"
+                 " in batches of %d...",
                  report_count, REPORT_UPDATE_CHUNK_SIZE)
         num_batches = report_count // REPORT_UPDATE_CHUNK_SIZE + 1
+
+        def _print_progress(batch: int):
+            LOG.info("[%d/%d] Upgrading 'reports'... (%d–%d) %.0f%% done.",
+                     batch, num_batches,
+                     (REPORT_UPDATE_CHUNK_SIZE * i) + 1,
+                     (REPORT_UPDATE_CHUNK_SIZE * (i + 1))
+                     if batch < num_batches else report_count,
+                     float(batch) / num_batches * 100)
+
         for i in range(0, num_batches):
-            LOG.debug("Upgrading 'reports'... batch %d/%d (reports %d – %d)",
-                      i + 1, num_batches,
-                      (REPORT_UPDATE_CHUNK_SIZE * i) + 1,
-                      (REPORT_UPDATE_CHUNK_SIZE * (i + 1)))
             conn.execute(f"""
                 UPDATE reports
                 SET
@@ -205,6 +211,7 @@ def upgrade():
                     )
                 ;
             """)
+            _print_progress(i + 1)
 
         LOG.info("Done upgrading 'reports'.")
 
@@ -441,48 +448,56 @@ def downgrade():
         if not report_count:
             return
 
-        LOG.info("Unlinking %d 'reports' from 'checkers' in batches of %d...",
+        LOG.info("Downgrading %d 'reports' from 'checkers',"
+                 " in batches of %d...",
                  report_count, REPORT_UPDATE_CHUNK_SIZE)
         num_batches = report_count // REPORT_UPDATE_CHUNK_SIZE + 1
+
+        def _print_progress(batch: int):
+            LOG.info("[%d/%d] Downgrading 'reports'... (%d–%d) %.0f%% done.",
+                     batch, num_batches,
+                     (REPORT_UPDATE_CHUNK_SIZE * i) + 1,
+                     (REPORT_UPDATE_CHUNK_SIZE * (i + 1))
+                     if batch < num_batches else report_count,
+                     float(batch) / num_batches * 100)
+
         for i in range(0, num_batches):
-            LOG.debug("Downgrading 'reports'... batch %d/%d (reports %d – %d)",
-                      i + 1, num_batches,
-                      (REPORT_UPDATE_CHUNK_SIZE * i) + 1,
-                      (REPORT_UPDATE_CHUNK_SIZE * (i + 1)))
-        if dialect == "sqlite":
-            conn.execute(f"""
-                UPDATE reports
-                SET
-                    (analyzer_name, checker_id, severity, checker_id_lookup) =
-                    (SELECT analyzer_name, checker_name, severity, '0'
-                        FROM checkers
-                        WHERE checkers.id = reports.checker_id_lookup)
-                WHERE reports.id IN (
-                        SELECT reports.id
-                        FROM reports
-                        WHERE reports.checker_id_lookup != 0
-                        LIMIT {REPORT_UPDATE_CHUNK_SIZE}
-                    )
-                ;
-            """)
-        else:
-            conn.execute(f"""
-                UPDATE reports
-                SET
-                    analyzer_name = chk.analyzer_name,
-                    checker_id = chk.checker_name,
-                    severity = chk.severity,
-                    checker_id_lookup = 0
-                FROM checkers AS chk
-                WHERE chk.id = reports.checker_id_lookup
-                    AND reports.id IN (
-                        SELECT reports.id
-                        FROM reports
-                        WHERE reports.checker_id_lookup != 0
-                        LIMIT {REPORT_UPDATE_CHUNK_SIZE}
-                    )
-                ;
-            """)
+            if dialect == "sqlite":
+                conn.execute(f"""
+                    UPDATE reports
+                    SET
+                        (analyzer_name, checker_id, severity, checker_id_lookup) =
+                        (SELECT analyzer_name, checker_name, severity, '0'
+                            FROM checkers
+                            WHERE checkers.id = reports.checker_id_lookup)
+                    WHERE reports.id IN (
+                            SELECT reports.id
+                            FROM reports
+                            WHERE reports.checker_id_lookup != 0
+                            LIMIT {REPORT_UPDATE_CHUNK_SIZE}
+                        )
+                    ;
+                """)
+            else:
+                conn.execute(f"""
+                    UPDATE reports
+                    SET
+                        analyzer_name = chk.analyzer_name,
+                        checker_id = chk.checker_name,
+                        severity = chk.severity,
+                        checker_id_lookup = 0
+                    FROM checkers AS chk
+                    WHERE chk.id = reports.checker_id_lookup
+                        AND reports.id IN (
+                            SELECT reports.id
+                            FROM reports
+                            WHERE reports.checker_id_lookup != 0
+                            LIMIT {REPORT_UPDATE_CHUNK_SIZE}
+                        )
+                    ;
+                """)
+
+            _print_progress(i + 1)
 
         LOG.info("Done downgrading 'reports'.")
 
