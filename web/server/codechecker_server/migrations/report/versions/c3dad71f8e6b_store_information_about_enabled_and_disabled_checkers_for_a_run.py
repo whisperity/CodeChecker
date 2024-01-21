@@ -14,7 +14,7 @@ depends_on = None
 
 
 from logging import getLogger
-from typing import Dict, List, Set, Tuple
+from typing import Dict, Tuple
 
 from alembic import op
 import sqlalchemy as sa
@@ -24,6 +24,9 @@ from sqlalchemy.ext.automap import automap_base
 from codechecker_common.util import progress
 from codechecker_server.migrations.common import \
     recompress_zlib_as_untagged, recompress_zlib_as_tagged_exact_ratio
+
+
+REPORT_UPDATE_CHUNK_SIZE = 100_000
 
 
 def upgrade():
@@ -60,8 +63,9 @@ def upgrade():
                                           callback=_print_progress):
                 if analysis_info.analyzer_command is None:
                     continue
-                _, new_analyzer_command = recompress_zlib_as_tagged_exact_ratio(
-                    analysis_info.analyzer_command)
+                _, new_analyzer_command = \
+                    recompress_zlib_as_tagged_exact_ratio(
+                        analysis_info.analyzer_command)
                 db.query(AnalysisInfo) \
                     .filter(AnalysisInfo.id == analysis_info.id) \
                     .update({"analyzer_command": new_analyzer_command},
@@ -80,11 +84,15 @@ def upgrade():
             sa.UniqueConstraint("analyzer_name", "checker_name",
                                 name=op.f("uq_checkers_analyzer_name"))
         )
-        op.create_index(op.f("ix_checkers_severity"),
-                        "checkers",
-                        ["severity"],
-                        unique=False
+        op.create_index(
+            op.f("ix_checkers_severity"),
+            "checkers",
+            ["severity"],
+            unique=False
         )
+
+        fk_analysisinfo_checkers_name = \
+            "fk_analysis_info_checkers_analysis_info_id_analysis_info"
         op.create_table(
             "analysis_info_checkers",
             sa.Column("analysis_info_id", sa.Integer(), nullable=False),
@@ -92,7 +100,7 @@ def upgrade():
             sa.Column("enabled", sa.Boolean(), nullable=True),
             sa.ForeignKeyConstraint(
                 ["analysis_info_id"], ["analysis_info.id"],
-                name=op.f("fk_analysis_info_checkers_analysis_info_id_analysis_info"),
+                name=op.f(fk_analysisinfo_checkers_name),
                 ondelete="CASCADE", initially="DEFERRED",
                 deferrable=True),
             sa.ForeignKeyConstraint(
@@ -163,22 +171,41 @@ def upgrade():
             LOG.info("Done filling 'checkers'.")
 
     def upgrade_reports():
-        LOG.info("Linking 'reports' to 'checkers'...")
-        conn.execute(f"""
-            UPDATE reports
-            SET
-                checker_id = (
-                    SELECT checkers.id
-                    FROM checkers
-                    WHERE checkers.analyzer_name = reports.analyzer_name
-                        AND checkers.checker_name = reports.checker_name
-                )
-            ;
-        """)
+        report_count = conn.execute("SELECT COUNT(id) AS cnt FROM reports;") \
+            .scalar()
+        if not report_count:
+            return
+
+        LOG.info("Linking %d 'reports' to 'checkers' in batches of %d...",
+                 report_count, REPORT_UPDATE_CHUNK_SIZE)
+
+        num_batches = report_count // REPORT_UPDATE_CHUNK_SIZE + 1
+        for i in range(0, num_batches):
+            LOG.debug("Upgrading 'reports'... batch %d/%d (reports %d – %d)",
+                      i + 1, num_batches,
+                      (REPORT_UPDATE_CHUNK_SIZE * i) + 1,
+                      (REPORT_UPDATE_CHUNK_SIZE * (i + 1)))
+            conn.execute(f"""
+                UPDATE reports
+                SET
+                    checker_id = (
+                        SELECT checkers.id
+                        FROM checkers
+                        WHERE checkers.analyzer_name = reports.analyzer_name
+                            AND checkers.checker_name = reports.checker_name
+                    )
+                WHERE reports.id IN (
+                        SELECT reports.id
+                        FROM reports
+                        WHERE reports.checker_id = 0
+                        LIMIT {REPORT_UPDATE_CHUNK_SIZE}
+                    )
+                ;
+            """)
+
+        LOG.info("Done upgrading 'reports'.")
 
     def drop_reports_table_columns():
-        LOG.info("Dropping unneeded 'reports' columns...")
-
         if dialect == "sqlite":
             op.execute("PRAGMA foreign_keys=OFF")
 
@@ -188,9 +215,9 @@ def upgrade():
                 # will break the database as the incoming constraints
                 # FOREIGN KEYing against 'reports' will essentially TRUNCATE
                 # due to the ON DELETE CASCADE markers, e.g., in
-                # 'bug_path_events'. This manifests as the Python-based database
-                # cleanup routine essentially wiping all reports off the
-                # database, following this migration.
+                # 'bug_path_events'. This manifests as the Python-based
+                # database cleanup routine essentially wiping all reports off
+                # the database, following this migration.
                 #
                 # Until SQLite 3.35.0 is widely available (Ubuntu 22.04, see
                 # also dabc6998b8f0_analysis_info_table.py), we side-step the
@@ -218,25 +245,30 @@ def upgrade():
                 # operation executed a "DROP TABLE reports;". These claims can
                 # be re-verified later by executing the following steps:
                 #   1. Change the database manually and set the incoming
-                #      foreign keys to "ON DELETE RESTRICT" instead of "CASCADE".
+                #      foreign keys to "ON DELETE RESTRICT" instead of
+                #      "CASCADE".
                 #   2. Run the migration. An exception will come from this
                 #      context but will refer to an internal "DROP TABLE" stmt.
-                #   3. Add an op.execute("COMMIT") before the PRAGMA call above.
+                #   3. Add an op.execute("COMMIT") before the PRAGMA call
+                #      above.
                 #   4. Re-run the migration and observe everything is good and
                 #      there was no data loss whatsoever!
 
                 # ba.drop_column("checker_name")
-                ba.alter_column("checker_name",
-                                new_column_name="checker_name_MOVED_TO_checkers")
+                ba.alter_column(
+                    "checker_name",
+                    new_column_name="checker_name_MOVED_TO_checkers")
 
                 # These columns are deleted as this data is now available
                 # through the 'checkers' lookup-table.
                 # ba.drop_column("analyzer_name")
                 # ba.drop_column("severity")
-                ba.alter_column("analyzer_name",
-                                new_column_name="analyzer_name_MOVED_TO_checkers")
-                ba.alter_column("severity",
-                                new_column_name="severity_MOVED_TO_checkers")
+                ba.alter_column(
+                    "analyzer_name",
+                    new_column_name="analyzer_name_MOVED_TO_checkers")
+                ba.alter_column(
+                    "severity",
+                    new_column_name="severity_MOVED_TO_checkers")
 
                 # These columns are dropped because they rarely contained any
                 # meaningful data with new informational value, and their
@@ -348,9 +380,9 @@ def downgrade():
             op.execute("PRAGMA foreign_keys=OFF")
 
             with op.batch_alter_table("reports", recreate="never") as ba:
-                # Drop the column that was introduced in this revision.
-                ba.drop_constraint(
-                    op.f("fk_reports_checker_id_checkers"))
+                # Recreation of FOREIGN KEYs is not possible without recreating
+                # the entire 'reports' table.
+                # ba.drop_constraint(op.f("fk_reports_checker_id_checkers"))
                 ba.drop_index(op.f("ix_reports_checker_id"))
                 ba.alter_column("checker_id",
                                 new_column_name="checker_id_lookup")
@@ -364,8 +396,8 @@ def downgrade():
                 # ba.add_column(col_reports_severity)
 
                 # FIXME: Until SQLite 3.35 is available and we can actually
-                # delete columns without a table recreation, we can instead just
-                # restore the existing partial data!
+                # delete columns without a table recreation, we can instead
+                # just restore the existing partial data!
                 ba.alter_column("analyzer_name_MOVED_TO_checkers",
                                 new_column_name="analyzer_name")
                 ba.alter_column("checker_name_MOVED_TO_checkers",
@@ -379,17 +411,17 @@ def downgrade():
 
                 op.execute("PRAGMA foreign_keys=ON")
         else:
-            op.drop_constraint(of.f("fk_reports_checker_id_checkers"),
+            op.drop_constraint(op.f("fk_reports_checker_id_checkers"),
                                "reports")
             op.drop_index(op.f("ix_reports_checker_id"), "reports")
             op.alter_column("reports", "checker_id",
                             new_column_name="checker_id_lookup")
 
-            ba.add_column("reports", col_reports_analyzer_name)
-            ba.add_column("reports", col_reports_checker_id)
-            ba.add_column("reports", col_reports_checker_cat)
-            ba.add_column("reports", col_reports_bug_type)
-            ba.add_column("reports", col_reports_severity)
+            op.add_column("reports", col_reports_analyzer_name)
+            op.add_column("reports", col_reports_checker_id)
+            op.add_column("reports", col_reports_checker_cat)
+            op.add_column("reports", col_reports_bug_type)
+            op.add_column("reports", col_reports_severity)
 
         LOG.info("Restored type of columns 'reports.bug_type', "
                  "'reports.checker_cat'. However, their contents can NOT "
@@ -400,16 +432,35 @@ def downgrade():
                  "this is a technical note.")
 
     def downgrade_reports():
-        LOG.info("Unlinking 'reports' from 'checkers'...")
+        report_count = conn.execute("SELECT COUNT(id) AS cnt FROM reports;") \
+            .scalar()
+        if not report_count:
+            return
 
+        LOG.info("Unlinking %d 'reports' from 'checkers' in batches of %d...",
+                 report_count, REPORT_UPDATE_CHUNK_SIZE)
+
+        num_batches = report_count // REPORT_UPDATE_CHUNK_SIZE + 1
+        for i in range(0, num_batches):
+            LOG.debug("Downgrading 'reports'... batch %d/%d (reports %d – %d)",
+                      i + 1, num_batches,
+                      (REPORT_UPDATE_CHUNK_SIZE * i) + 1,
+                      (REPORT_UPDATE_CHUNK_SIZE * (i + 1)))
         if dialect == "sqlite":
             conn.execute(f"""
                 UPDATE reports
                 SET
-                    (analyzer_name, checker_name, severity) =
+                    (analyzer_name, checker_id, severity) =
                     (SELECT analyzer_name, checker_name, severity
                         FROM checkers
-                        WHERE checkers.id = reports.checker_id)
+                        WHERE checkers.id = reports.checker_id_lookup)
+                WHERE reports.id IN (
+                        SELECT reports.id
+                        FROM reports
+                        WHERE reports.checker_id IS NULL
+                            OR reports.checker_id = ''
+                        LIMIT {REPORT_UPDATE_CHUNK_SIZE}
+                    )
                 ;
             """)
         else:
@@ -417,12 +468,21 @@ def downgrade():
                 UPDATE reports
                 SET
                     analyzer_name = chk.analyzer_name,
-                    checker_name = chk.checker_name,
-                    severity = chk.severity
+                    checker_id = chk.checker_name,
+                    severity = chk.severity,
+                    checker_id_lookup = 0
                 FROM checkers AS chk
-                WHERE chk.id = reports.checker_id
+                WHERE chk.id = reports.checker_id_lookup
+                    AND reports.id IN (
+                        SELECT reports.id
+                        FROM reports
+                        WHERE reports.checker_id_lookup != 0
+                        LIMIT {REPORT_UPDATE_CHUNK_SIZE}
+                    )
                 ;
             """)
+
+        LOG.info("Done downgrading 'reports'.")
 
     def drop_checker_id_numeric_column():
         if dialect == "sqlite":
