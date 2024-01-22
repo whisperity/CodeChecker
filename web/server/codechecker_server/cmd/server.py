@@ -512,7 +512,7 @@ def check_product_db_status(cfg_sql_server, migration_root, environ):
                 s_ver = None
             prod_status[pd.endpoint] = (status, s_ver, package_schema,
                                         db_location)
-        except Exception as e:
+        except Exception:
             LOG.error("Unable to get the status for product '%s', "
                       "considering as if the connection failed.",
                       pd.endpoint)
