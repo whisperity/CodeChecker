@@ -18,6 +18,7 @@ import signal
 import socket
 import sys
 import time
+from typing import List
 
 import psutil
 from alembic import config
@@ -473,21 +474,24 @@ def check_product_db_status(cfg_sql_server, migration_root, environ):
 
     :returns: dictionary of product endpoints with database statuses
     """
-
     engine = cfg_sql_server.create_engine()
     config_session = sessionmaker(bind=engine)
     sess = config_session()
 
+    products: List[ORMProduct] = list()
     try:
-        products = sess.query(ORMProduct).all()
+        products = sess.query(ORMProduct) \
+            .order_by(ORMProduct.endpoint.asc()) \
+            .all()
     except Exception as ex:
-        sess.close()
-        engine.dispose()
-
         LOG.debug(ex)
         LOG.error("Failed to get product configurations from the database.")
         LOG.error("Please check your command arguments.")
         sys.exit(1)
+    finally:
+        # sys.exit raises SystemExit, which still performs finally clauses!
+        sess.close()
+        engine.dispose()
 
     package_schema = get_schema_version_from_package(migration_root)
 
@@ -518,9 +522,6 @@ def check_product_db_status(cfg_sql_server, migration_root, environ):
                       pd.endpoint)
             prod_status[pd.endpoint] = (DBStatus.FAILED_TO_CONNECT, None,
                                         package_schema, db_location)
-
-    sess.close()
-    engine.dispose()
 
     return prod_status
 
@@ -559,10 +560,10 @@ class NonExistentProductError(Exception):
 
 
 def __db_migration(cfg_sql_server, migration_root, environ,
-                   product_to_upgrade='all', force_upgrade=False):
+                   product_to_upgrade: str='all',
+                   force_upgrade: bool=False):
     """
-    Handle database management.
-    Schema checking and migration.
+    Handles database management, schema checking and migrations.
     """
     LOG.info("Preparing schema upgrade for %s", str(product_to_upgrade))
     product_name = product_to_upgrade
@@ -570,9 +571,9 @@ def __db_migration(cfg_sql_server, migration_root, environ,
     prod_statuses = check_product_db_status(cfg_sql_server,
                                             migration_root,
                                             environ)
-    prod_to_upgrade = []
+    prod_to_upgrade: List[str] = list()
 
-    if product_name != 'all':
+    if product_name != "all":
         avail = prod_statuses.get(product_name)
         if not avail:
             LOG.error("No product was found with this endpoint: %s",
@@ -581,12 +582,11 @@ def __db_migration(cfg_sql_server, migration_root, environ,
         prod_to_upgrade.append(product_name)
     else:
         prod_to_upgrade = list(prod_statuses.keys())
+    prod_to_upgrade.sort()
 
-    LOG.warning("Please note after migration only "
-                "newer CodeChecker versions can be used "
-                "to start the server")
-    LOG.warning("It is advised to make a full backup of your "
-                "run databases.")
+    LOG.warning("Please note after migration only newer CodeChecker versions "
+                "can be used to start the server")
+    LOG.warning("It is advised to make a full backup of your run databases.")
 
     for prod in prod_to_upgrade:
         LOG.info("========================")
