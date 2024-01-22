@@ -512,7 +512,7 @@ def check_product_db_status(cfg_sql_server, migration_root, environ):
                 s_ver = None
             prod_status[pd.endpoint] = (status, s_ver, package_schema,
                                         db_location)
-        except Exception as e:
+        except Exception:
             LOG.error("Unable to get the status for product '%s', "
                       "considering as if the connection failed.",
                       pd.endpoint)
@@ -592,7 +592,9 @@ def __db_migration(cfg_sql_server, migration_root, environ,
         LOG.info("========================")
         LOG.info("Checking: %s", prod)
 
+        endpoint, connection_str = None, None
         try:
+            # Obtain the configuration information for the current product.
             engine = cfg_sql_server.create_engine()
             config_session = sessionmaker(bind=engine)
             sess = config_session()
@@ -601,7 +603,29 @@ def __db_migration(cfg_sql_server, migration_root, environ,
             if product is None:
                 raise NonExistentProductError(prod)
 
-            db = database.SQLServer.from_connection_string(product.connection,
+            endpoint = product.endpoint
+            connection_str = product.connection
+
+            # Close the connection to the CONFIG database. It is not needed
+            # anymore, but an intermittent timeout would cause scary
+            # exceptions if the migration itself is running too long.
+            sess.close()
+            engine.dispose()
+        except NonExistentProductError as nepe:
+            LOG.error("Attempted to upgrade product '%s', but it was not "
+                      "found in the server's configuration database.",
+                      nepe.product_name)
+        except Exception:
+            LOG.error("Failed to get the configuration for product '%s'",
+                      prod)
+            import traceback
+            traceback.print_exc()
+
+        if not endpoint or not connection_str:
+            continue
+
+        try:
+            db = database.SQLServer.from_connection_string(connection_str,
                                                            RUN_META,
                                                            migration_root,
                                                            interactive=False,
@@ -614,7 +638,7 @@ def __db_migration(cfg_sql_server, migration_root, environ,
 
             if db_status == DBStatus.SCHEMA_MISSING:
                 question = "Do you want to initialize a new schema for " \
-                            + product.endpoint + "? Y(es)/n(o) "
+                            + endpoint + "? Y(es)/n(o) "
                 if force_upgrade or env.get_user_input(question):
                     conn_status = db.connect(init=True)
                     status_str = database_status.db_status_msg.get(
@@ -624,7 +648,7 @@ def __db_migration(cfg_sql_server, migration_root, environ,
                     LOG.info("No schema initialization was done.")
             elif db_status == DBStatus.SCHEMA_MISMATCH_OK:
                 question = "Do you want to upgrade to new schema for " \
-                            + product.endpoint + "? Y(es)/n(o) "
+                            + endpoint + "? Y(es)/n(o) "
                 if force_upgrade or env.get_user_input(question):
                     LOG.info("Upgrading schema ...")
                     new_status = db.upgrade()
@@ -634,13 +658,6 @@ def __db_migration(cfg_sql_server, migration_root, environ,
                     LOG.info(status_str)
                 else:
                     LOG.info("No schema migration was done.")
-
-            sess.close()
-            engine.dispose()
-        except NonExistentProductError as nepe:
-            LOG.error("Attempted to upgrade product '%s', but it was not "
-                      "found in the server's configuration database.",
-                      nepe.product_name)
         except (CommandError, SQLAlchemyError):
             LOG.error("A database error occurred during the init/migration "
                       "of '%s'", prod)
