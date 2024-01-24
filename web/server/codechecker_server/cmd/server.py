@@ -560,8 +560,8 @@ class NonExistentProductError(Exception):
 
 
 def __db_migration(cfg_sql_server, migration_root, environ,
-                   product_to_upgrade: str='all',
-                   force_upgrade: bool=False):
+                   product_to_upgrade: str = 'all',
+                   force_upgrade: bool = False):
     """
     Handles database management, schema checking and migrations.
     """
