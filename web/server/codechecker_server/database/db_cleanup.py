@@ -10,6 +10,7 @@ Contains housekeeping routines that are used to remove expired, obsolete,
 or dangling records from the database.
 """
 from datetime import datetime, timedelta
+from typing import Dict
 
 import sqlalchemy
 
@@ -193,7 +194,8 @@ def remove_unused_analysis_info(session_maker):
 
 def upgrade_severity_levels(session_maker, checker_labels):
     """
-    Updates the potentially changed severities at the reports.
+    Updates the potentially changed severities to reflect the data in the
+    current label configuration files.
     """
     LOG.debug("Upgrading severity levels started...")
 
@@ -214,13 +216,66 @@ def upgrade_severity_levels(session_maker, checker_labels):
                         Severity._VALUES_TO_NAMES[old_severity_db]
                     new_severity: str = \
                         checker_labels.severity(checker, analyzer)
+
+                    if old_severity == new_severity:
+                        continue
+
+                    if new_severity == "UNSPECIFIED":
+                        # No exact match for the checker's name in the
+                        # label config for the analyzer. This can mean that
+                        # the records are older than a change in the checker
+                        # naming scheme (e.g., cppchecker results pre-2021).
+                        LOG.warning("Checker '%s/%s' (database severity: "
+                                    "'%s' (%d)) does not have a "
+                                    "corresponding entry in the label "
+                                    "config file.",
+                                    analyzer, checker,
+                                    old_severity, old_severity_db)
+
+                        new_sev_attempts: Dict[str, str] = {
+                            chk_name: severity
+                            for chk_name, severity in
+                            ((name_attempt,
+                              checker_labels.severity(name_attempt, analyzer))
+                             for name_attempt in [
+                                 "%s.%s" % (analyzer, checker),
+                                 "%s-%s" % (analyzer, checker),
+                                 "%s/%s" % (analyzer, checker)
+                             ])
+                            if severity != "UNSPECIFIED"
+                        }
+
+                        if len(new_sev_attempts) == 0:
+                            LOG.debug("%s/%s: Keeping the old severity "
+                                      "intact...", analyzer, checker)
+                            continue
+                        if len(new_sev_attempts) >= 2 and \
+                                len(set(new_sev_attempts.values())) >= 2:
+                            LOG.error("%s/%s: Multiple similar checkers "
+                                      "WITH CONFLICTING SEVERITIES were "
+                                      "found instead: %s",
+                                      analyzer, checker,
+                                      str(list(new_sev_attempts.items())))
+                            LOG.debug("%s/%s: Keeping the old severity "
+                                      "intact...", analyzer, checker)
+                            continue
+                        if len(set(new_sev_attempts.values())) == 1:
+                            attempted_name, new_severity = \
+                                next(iter(sorted(new_sev_attempts.items())))
+
+                            LOG.info("%s/%s: Found similar checker '%s/%s' "
+                                     "(severity: '%s'), using this for the "
+                                     "upgrade.",
+                                     analyzer, checker,
+                                     analyzer, attempted_name,
+                                     new_severity)
+                            if old_severity == new_severity:
+                                continue
+
                     new_severity_db: int = \
                         Severity._NAMES_TO_VALUES[new_severity]
 
-                    if old_severity_db == new_severity_db:
-                        continue
-
-                    LOG.info("Upgrading the severity level of checker "
+                    LOG.info("Upgrading the severity of checker "
                              "'%s/%s' from '%s' (%d) to '%s' (%d).",
                              analyzer, checker,
                              old_severity, old_severity_db,
@@ -229,6 +284,8 @@ def upgrade_severity_levels(session_maker, checker_labels):
                         .filter(Checker.id == checker_row.id) \
                         .update({Checker.severity: new_severity_db})
                     count += 1
+
+                session.flush()
 
             if count:
                 LOG.debug("%d checker severities upgraded.", count)
