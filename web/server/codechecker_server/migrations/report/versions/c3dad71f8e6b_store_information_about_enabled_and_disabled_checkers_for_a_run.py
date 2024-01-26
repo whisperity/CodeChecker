@@ -150,30 +150,22 @@ def upgrade():
         if not count:
             return
 
-        checkers_to_severity: Dict[Tuple[str, str], int] = dict()
-
-        def _print_progress(index: int, percent: float):
-            LOG.info("[%d/%d] Gathering checkers from 'reports'... "
-                     "%.0f%% done. %d checkers found.",
-                     index, count, percent, len(checkers_to_severity))
-
-        LOG.info("Preparing to fill 'checkers' from %d 'reports'...",
-                 count)
-        for report in progress(db.query(Report.analyzer_name,
-                                        Report.checker_name,
-                                        Report.severity), count,
-                               100 // 5,
-                               callback=_print_progress):
-            chk = (report.analyzer_name, report.checker_name)
-            checkers_to_severity[chk] = report.severity
-
-        for chk in sorted(checkers_to_severity.keys()):
-            obj = Checker(analyzer_name=chk[0], checker_name=chk[1],
-                          severity=checkers_to_severity[chk])
-            db.add(obj)
+        LOG.info("Preparing to fill 'checkers' from %d 'reports'...", count)
+        checker_count = 0
+        for chk in db.query(Report.analyzer_name,
+                            Report.checker_name,
+                            Report.severity) \
+                .group_by(Report.analyzer_name,
+                          Report.checker_name,
+                          Report.severity) \
+                .all():
+            db.add(Checker(analyzer_name=chk.analyzer_name,
+                           checker_name=chk.checker_name,
+                           severity=chk.severity))
+            checker_count += 1
 
         db.commit()
-        LOG.info("Done filling 'checkers'.")
+        LOG.info("Done filling 'checkers', %d unique entries.", checker_count)
 
     def upgrade_reports():
         report_count = conn.execute("SELECT COUNT(id) FROM reports;").scalar()
