@@ -211,8 +211,15 @@ def upgrade_severity_levels(session_maker, checker_labels):
                 for checker_row in checkers_for_analyzer_in_database:
                     checker: str = checker_row.checker_name
                     old_severity_db: int = checker_row.severity
-                    old_severity: str = \
-                        Severity._VALUES_TO_NAMES[old_severity_db]
+                    try:
+                        old_severity: str = \
+                            Severity._VALUES_TO_NAMES[old_severity_db]
+                    except KeyError:
+                        LOG.error("Checker '%s/%s' contains invalid "
+                                  "severity %d, considering as if "
+                                  "'UNSPECIFIED' (0)!",
+                                  analyzer, checker, old_severity_db)
+                        old_severity_db, old_severity = 0, "UNSPECIFIED"
                     new_severity: str = \
                         checker_labels.severity(checker, analyzer)
 
@@ -295,4 +302,3 @@ def upgrade_severity_levels(session_maker, checker_labels):
         except (sqlalchemy.exc.OperationalError,
                 sqlalchemy.exc.ProgrammingError) as ex:
             LOG.error("Failed to upgrade severity levels: %s", str(ex))
-
