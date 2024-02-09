@@ -80,7 +80,7 @@ def remove_unused_files(session_maker):
     # some measurements. Maybe this could be a command-line parameter. But in
     # the long terms we are planning to reduce cascade deletes by redesigning
     # bug_path_events and bug_report_points tables.
-    CHUNK_SIZE = 500000
+    CHUNK_SIZE = 500_000
 
     with DBSession(session_maker) as session:
         LOG.debug("Garbage collection of dangling files started...")
@@ -197,9 +197,8 @@ def upgrade_severity_levels(session_maker, checker_labels):
     Updates the potentially changed severities to reflect the data in the
     current label configuration files.
     """
-    LOG.debug("Upgrading severity levels started...")
-
     with DBSession(session_maker) as session:
+        LOG.debug("Upgrading severity levels started...")
         try:
             count = 0
             for analyzer in sorted(checker_labels.get_analyzers()):
@@ -291,8 +290,9 @@ def upgrade_severity_levels(session_maker, checker_labels):
                 LOG.debug("%d checker severities upgraded.", count)
 
             session.commit()
+
+            LOG.debug("Upgrading severity levels finished.")
         except (sqlalchemy.exc.OperationalError,
                 sqlalchemy.exc.ProgrammingError) as ex:
             LOG.error("Failed to upgrade severity levels: %s", str(ex))
 
-    LOG.debug("Upgrading severity levels finished.")
