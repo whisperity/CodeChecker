@@ -295,4 +295,3 @@ def upgrade_severity_levels(session_maker, checker_labels):
         except (sqlalchemy.exc.OperationalError,
                 sqlalchemy.exc.ProgrammingError) as ex:
             LOG.error("Failed to upgrade severity levels: %s", str(ex))
-
