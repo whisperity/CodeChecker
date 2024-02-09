@@ -186,23 +186,45 @@ def upgrade():
                      float(batch) / num_batches * 100)
 
         for i in range(0, num_batches):
-            conn.execute(f"""
-                UPDATE reports
-                SET
-                    checker_id = (
-                        SELECT checkers.id
-                        FROM checkers
-                        WHERE checkers.analyzer_name = reports.analyzer_name
-                            AND checkers.checker_name = reports.checker_name
-                    )
-                WHERE reports.id IN (
-                        SELECT reports.id
-                        FROM reports
-                        WHERE reports.checker_id = 0
-                        LIMIT {REPORT_UPDATE_CHUNK_SIZE}
-                    )
-                ;
-            """)
+            # FIXME: "UPDATE ... SET ... FROM ..." is only supported starting
+            # with SQLite version 3.33.0 (2020-08-14). Until this version
+            # reaches LTS maturity (Ubuntu 20.04 LTS comes with 3.31.0, raising
+            # a syntax error on the "FROM" in the "UPDATE" query), this
+            # branching here needs to stay.
+            if dialect == "sqlite":
+                conn.execute(f"""
+                    UPDATE reports
+                    SET
+                        checker_id = (
+                            SELECT checkers.id
+                            FROM checkers
+                            WHERE checkers.analyzer_name = reports.analyzer_name
+                                AND checkers.checker_name = reports.checker_name
+                        )
+                    WHERE reports.id IN (
+                            SELECT reports.id
+                            FROM reports
+                            WHERE reports.checker_id = 0
+                            LIMIT {REPORT_UPDATE_CHUNK_SIZE}
+                        )
+                    ;
+                """)
+            else:
+                conn.execute(f"""
+                    UPDATE reports
+                    SET
+                        checker_id = checkers.id
+                    FROM checkers
+                    WHERE checkers.analyzer_name = reports.analyzer_name
+                        AND checkers.checker_name = reports.checker_name
+                        AND reports.id IN (
+                            SELECT reports.id
+                            FROM reports
+                            WHERE reports.checker_id = 0
+                            LIMIT {REPORT_UPDATE_CHUNK_SIZE}
+                        )
+                    ;
+                """)
             _print_progress(i + 1)
 
         LOG.info("Done upgrading 'reports'.")
@@ -454,6 +476,11 @@ def downgrade():
                      float(batch) / num_batches * 100)
 
         for i in range(0, num_batches):
+            # FIXME: "UPDATE ... SET ... FROM ..." is only supported starting
+            # with SQLite version 3.33.0 (2020-08-14). Until this version
+            # reaches LTS maturity (Ubuntu 20.04 LTS comes with 3.31.0, raising
+            # a syntax error on the "FROM" in the "UPDATE" query), this
+            # branching here needs to stay.
             if dialect == "sqlite":
                 conn.execute(f"""
                     UPDATE reports
@@ -474,12 +501,12 @@ def downgrade():
                 conn.execute(f"""
                     UPDATE reports
                     SET
-                        analyzer_name = chk.analyzer_name,
-                        checker_id = chk.checker_name,
-                        severity = chk.severity,
+                        analyzer_name = checkers.analyzer_name,
+                        checker_id = checkers.checker_name,
+                        severity = checkers.severity,
                         checker_id_lookup = 0
-                    FROM checkers AS chk
-                    WHERE chk.id = reports.checker_id_lookup
+                    FROM checkers
+                    WHERE checkers.id = reports.checker_id_lookup
                         AND reports.id IN (
                             SELECT reports.id
                             FROM reports
@@ -488,7 +515,6 @@ def downgrade():
                         )
                     ;
                 """)
-
             _print_progress(i + 1)
 
         LOG.info("Done downgrading 'reports'.")
