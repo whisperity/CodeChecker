@@ -19,6 +19,7 @@ from typing import Dict, Tuple
 from alembic import op
 import sqlalchemy as sa
 from sqlalchemy.orm import Session
+from sqlalchemy.sql.expression import func
 from sqlalchemy.ext.automap import automap_base
 
 from codechecker_common.util import progress
@@ -26,7 +27,7 @@ from codechecker_server.migrations.common import \
     recompress_zlib_as_untagged, recompress_zlib_as_tagged_exact_ratio
 
 
-REPORT_UPDATE_CHUNK_SIZE = 100_000
+REPORT_UPDATE_CHUNK_SIZE = 1_000_000
 
 
 def upgrade():
@@ -150,14 +151,19 @@ def upgrade():
         if not count:
             return
 
+        # It is possible that the same (analyzer_name, checker_name) query,
+        # when GROUPed BY, will still have multiple reports with distinct
+        # severities. Adding all entries here would result in the UNIQUE
+        # constraint violation. Luckily, severities are numeric, and thus can
+        # be sorted, and saying that for each checkers the largest severity
+        # should be the new severity is a reasonable assumption.
         LOG.info("Preparing to fill 'checkers' from %d 'reports'...", count)
         checker_count = 0
         for chk in db.query(Report.analyzer_name,
                             Report.checker_name,
-                            Report.severity) \
+                            func.max(Report.severity).label("severity")) \
                 .group_by(Report.analyzer_name,
-                          Report.checker_name,
-                          Report.severity) \
+                          Report.checker_name) \
                 .all():
             db.add(Checker(analyzer_name=chk.analyzer_name,
                            checker_name=chk.checker_name,
