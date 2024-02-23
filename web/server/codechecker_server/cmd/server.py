@@ -503,6 +503,7 @@ def check_product_db_status(cfg_sql_server, migration_root, environ):
     prod_status = {}
     for pd in products:
         db = database.SQLServer.from_connection_string(pd.connection,
+                                                       pd.endpoint,
                                                        RUN_META,
                                                        migration_root,
                                                        interactive=False,
@@ -626,6 +627,7 @@ def __db_migration(cfg_sql_server, migration_root, environ,
 
         try:
             db = database.SQLServer.from_connection_string(connection_str,
+                                                           endpoint,
                                                            RUN_META,
                                                            migration_root,
                                                            interactive=False,
@@ -864,7 +866,7 @@ def server_init_start(args):
                          context.ld_lib_path_extra)
 
     cfg_sql_server = database.SQLServer.from_cmdline_args(
-        vars(args), CONFIG_META, context.config_migration_root,
+        vars(args), "config", CONFIG_META, context.config_migration_root,
         interactive=True, env=environ)
 
     LOG.info("Checking configuration database ...")
@@ -888,27 +890,25 @@ def server_init_start(args):
     force_upgrade = True if 'force_upgrade' in args else False
 
     if db_status == DBStatus.SCHEMA_MISMATCH_OK:
-        LOG.debug("Configuration database schema mismatch.")
+        LOG.debug("Configuration database schema mismatch!")
         LOG.debug("Schema upgrade is possible.")
-        LOG.warning("Please note after migration only "
-                    "newer CodeChecker versions can be used "
-                    "to start the server")
+        LOG.warning("Please note after migration only newer CodeChecker "
+                    "versions can be used to start the server!")
         LOG.warning("It is advised to make a full backup of your "
-                    "configuration database")
-
+                    "configuration database!")
         LOG.warning(cfg_sql_server.get_db_location())
 
-        question = 'Do you want to upgrade to the new schema?' \
-                   ' Y(es)/n(o) '
+        question = "Do you want to upgrade to the new schema?" \
+                   " Y(es)/n(o) "
         if force_upgrade or env.get_user_input(question):
-            print("Upgrading schema ...")
-            ret = cfg_sql_server.upgrade()
-            msg = database_status.db_status_msg.get(
-                ret, 'Unknown database status')
-            print(msg)
-            if ret != DBStatus.OK:
+            LOG.info("Upgrading schema ...")
+            new_status = cfg_sql_server.upgrade()
+            status_str = database_status.db_status_msg.get(
+                new_status, "Unknown database status")
+            LOG.info(status_str)
+            if new_status != DBStatus.OK:
                 LOG.error("Schema migration failed")
-                sys.exit(ret)
+                sys.exit(new_status)
         else:
             LOG.info("No schema migration was done.")
             sys.exit(0)
@@ -922,18 +922,22 @@ def server_init_start(args):
     # statuses can be checked.
     try:
         if args.status:
-            ret = __db_status_check(cfg_sql_server, context.migration_root,
-                                    environ, args.status)
-            sys.exit(ret)
+            db_status = __db_status_check(cfg_sql_server,
+                                          context.migration_root,
+                                          environ,
+                                          args.status)
+            sys.exit(db_status)
     except AttributeError:
         LOG.debug('Status was not in the arguments.')
 
     try:
         if args.product_to_upgrade:
-            ret = __db_migration(cfg_sql_server, context.migration_root,
-                                 environ, args.product_to_upgrade,
-                                 force_upgrade)
-            sys.exit(ret)
+            db_status = __db_migration(cfg_sql_server,
+                                       context.migration_root,
+                                       environ,
+                                       args.product_to_upgrade,
+                                       force_upgrade)
+            sys.exit(db_status)
     except AttributeError:
         LOG.debug('Product upgrade was not in the arguments.')
 
@@ -1001,10 +1005,10 @@ def server_init_start(args):
         break
 
     if non_ok_db:
-        print("There are some database issues.")
+        LOG.error("There are some database issues.")
         if not force_upgrade:
-            msg = "Do you want to start the server? Y(es)/n(o) "
-            if not env.get_user_input(msg):
+            status_str = "Do you want to start the server? Y(es)/n(o) "
+            if not env.get_user_input(status_str):
                 sys.exit(1)
 
     # Start database viewer.

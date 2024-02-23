@@ -7,6 +7,7 @@
 # -------------------------------------------------------------------------
 import logging
 import sys
+from typing import Optional, cast
 
 
 class MigrationFormatter(logging.Formatter):
@@ -17,14 +18,25 @@ class MigrationFormatter(logging.Formatter):
     def __init__(self, schema: str):
         super().__init__(fmt="[%(levelname)s][%(asctime)s] "
                              "{migration/%(schema)s} "
-                             "[%(schemaVersion)s]:%(lineno)d "
+                             "[%(database)s] "
+                             "- %(revision)s:%(lineno)d "
                              "- %(message)s",
                          datefmt="%Y-%m-%d %H:%M:%S")
         self.schema = schema
+        self._database: Optional[str] = None
+
+    @property
+    def database(self):
+        return self._database or "<UNKNOWN!>"
+
+    @database.setter
+    def database(self, db_name: str):
+        self._database = db_name
 
     def format(self, record):
+        record.database = self.database
         record.schema = self.schema
-        record.schemaVersion = record.filename[:record.filename.find("_")]
+        record.revision = record.filename[:record.filename.find("_")]
         return super().format(record)
 
 
@@ -36,7 +48,7 @@ def setup_logger(schema: str):
 
     In migration scripts, use the built-in logging facilities instead of
     CodeChecker's wrapper, and ensure that the name of the logger created
-    exactly matches "migration"!
+    exactly matches ``migration/<some schema>``!
     """
     sys_logger = logging.getLogger("system")
     codechecker_loglvl = sys_logger.getEffectiveLevel()
@@ -61,3 +73,17 @@ def setup_logger(schema: str):
 
         logger.setLevel(codechecker_loglvl)
         logger.addHandler(handler)
+    else:
+        handler = logger.handlers[0]
+        fmt = handler.formatter
+
+    return logger, handler, cast(MigrationFormatter, fmt)
+
+
+def set_logger_database_name(schema: str, database: str):
+    """
+    Sets the logger's output for the current migration ``schema`` to indicate
+    that the actions are performed on ``database``.
+    """
+    _, _, fmt = setup_logger(schema)
+    fmt.database = database

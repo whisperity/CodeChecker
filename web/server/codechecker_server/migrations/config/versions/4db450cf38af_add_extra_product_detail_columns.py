@@ -38,12 +38,12 @@ def upgrade():
     try:
         product_con = op.get_bind()
         products = product_con.execute(
-            "SELECT id, connection from products").fetchall()
+            "SELECT id, endpoint, connection FROM products").fetchall()
 
         context = webserver_context.get_context()
-        for id_, connection in products:
+        for id_, endpoint, connection in products:
             sql_server = database.SQLServer.from_connection_string(
-                connection, RUN_META, context.run_migration_root)
+                connection, endpoint, RUN_META, context.run_migration_root)
 
             engine = sa.create_engine(sql_server.get_connection_string())
             conn = engine.connect()

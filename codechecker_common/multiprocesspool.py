@@ -11,7 +11,7 @@ Multiprocess compatibility module.
 
 import sys
 
-# pylint: disable=unused-import
+# pylint: disable=no-name-in-module,unused-import
 if sys.platform in ["darwin", "win32"]:
     from multiprocess import Pool as MultiProcessPool
 else:
