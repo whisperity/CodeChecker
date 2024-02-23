@@ -11,6 +11,7 @@ import sys
 from alembic import context
 from sqlalchemy import engine_from_config, pool
 
+from codechecker_server.database.run_db_model import Base
 from codechecker_server.migrations.logging import setup_logger
 
 # This is the Alembic Config object, which provides
@@ -20,8 +21,6 @@ config = context.config
 # Add model's MetaData object here for 'autogenerate' support.
 sys.path.insert(0, os.path.abspath(
     os.path.join(os.path.dirname(__file__), "..", "..", "..")))
-
-from codechecker_server.database.run_db_model import Base
 
 target_metadata = Base.metadata
 
