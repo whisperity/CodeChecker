@@ -585,11 +585,11 @@ class Product:
 
         Each time the connect is called the db_status is updated.
         """
-
         LOG.debug("Checking '%s' database.", self.endpoint)
 
         sql_server = database.SQLServer.from_connection_string(
             self.__connection_string,
+            self.__endpoint,
             RUN_META,
             self.__context.run_migration_root,
             interactive=False,
