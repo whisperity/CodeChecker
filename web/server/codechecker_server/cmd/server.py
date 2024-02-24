@@ -950,12 +950,11 @@ def server_init_start(args):
 
     if create_default_product:
         # Create a default product and add it to the configuration database.
-
         LOG.debug("Create default product...")
         LOG.debug("Configuring schema and migration...")
 
         prod_server = database.SQLiteDatabase(
-            default_product_path, RUN_META,
+            "Default", default_product_path, RUN_META,
             context.run_migration_root, environ)
 
         LOG.debug("Checking 'Default' product database.")

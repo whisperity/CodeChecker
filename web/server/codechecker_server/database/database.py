@@ -102,8 +102,10 @@ class DBContext:
             self.db_session = sessionmaker(bind=self.engine)()
             self.db_connection = self.db_session.connection()
         except Exception as ex:
-            LOG.debug("Connection error")
-            LOG.debug(ex)
+            LOG.debug("Connection error:")
+            LOG.debug("%s", str(ex))
+            import traceback
+            traceback.print_exc()
             self.db_error = DBStatus.FAILED_TO_CONNECT
 
         return self
@@ -152,17 +154,16 @@ class SQLServer(metaclass=ABCMeta):
            instance of the new server type if needed
     """
 
-    def __init__(self, friendly_name: str, model_meta, migration_root):
+    def __init__(self, name_in_log: str, model_meta, migration_root):
         """
         Sets self.migration_root. migration_root should be the path to the
         alembic migration scripts.
 
         Also sets the created class' model identifier to the given meta dict.
         """
-
+        self.name_in_log = name_in_log
         self.__model_meta = model_meta
         self.migration_root = migration_root
-        self.friendly_name = friendly_name
 
     def _create_schema(self):
         """
@@ -178,7 +179,7 @@ class SQLServer(metaclass=ABCMeta):
                 cfg = config.Config()
                 cfg.set_main_option("script_location", self.migration_root)
                 cfg.attributes["connection"] = db.connection
-                cfg.attributes["database_name"] = self.friendly_name
+                cfg.attributes["database_name"] = self.name_in_log
 
                 mcontext = migration.MigrationContext.configure(db.connection)
                 database_schema_revision = mcontext.get_current_revision()
@@ -326,7 +327,7 @@ class SQLServer(metaclass=ABCMeta):
                 cfg = config.Config()
                 cfg.set_main_option("script_location", self.migration_root)
                 cfg.attributes["connection"] = db.connection
-                cfg.attributes["database_name"] = self.friendly_name
+                cfg.attributes["database_name"] = self.name_in_log
 
                 command.upgrade(cfg, "head")
                 db.session.commit()
@@ -358,14 +359,14 @@ class SQLServer(metaclass=ABCMeta):
         pass
 
     @abstractmethod
-    def get_connection_string(self):
+    def get_connection_string(self) -> str:
         """
         Returns the connection string for SQLAlchemy.
 
         DO NOT LOG THE CONNECTION STRING BECAUSE IT MAY CONTAIN THE PASSWORD
         FOR THE DATABASE!
         """
-        pass
+        raise NotImplementedError()
 
     @abstractmethod
     def get_db_location(self):
@@ -436,14 +437,21 @@ class SQLServer(metaclass=ABCMeta):
         return args
 
     @staticmethod
-    def from_connection_string(connection_string, friendly_name, model_meta,
-                               migration_root, interactive=False, env=None):
+    def from_connection_string(connection_string: str,
+                               name_in_log: str,
+                               model_meta,
+                               migration_root,
+                               interactive=False,
+                               env=None):
         """
         Normally only this method is called form outside of this module in
         order to instance the proper server implementation.
 
         Parameters:
-            args: the dict of database arguments
+            connection_string: A fully formatted database URN identifying the
+                connection parameters.
+            name_in_log: A user-facing name of the current database to appear
+                in log output.
             model_meta: the meta identifier of the database model to use
             migration_root: path to the database migration scripts
             env: a run environment dictionary.
@@ -451,14 +459,14 @@ class SQLServer(metaclass=ABCMeta):
 
         args = SQLServer.connection_string_to_args(connection_string)
         return SQLServer.from_cmdline_args(args,
-                                           friendly_name,
+                                           name_in_log,
                                            model_meta,
                                            migration_root,
                                            interactive,
                                            env)
 
     @staticmethod
-    def from_cmdline_args(args, friendly_name, model_meta, migration_root,
+    def from_cmdline_args(args, name_in_log: str, model_meta, migration_root,
                           interactive=False, env=None):
         """
         Normally only this method is called form outside of this module in
@@ -467,7 +475,7 @@ class SQLServer(metaclass=ABCMeta):
         Parameters:
             args: the command line arguments from CodeChecker.py, but as a
               dictionary (if argparse.Namespace, use vars(args)).
-            friendly_name: A custom user-friendly identifier for the DB in
+            name_in_log: A custom user-friendly identifier for the DB in
               logs.
             model_meta: the meta identifier of the database model to use
             migration_root: path to the database migration scripts
@@ -482,7 +490,7 @@ class SQLServer(metaclass=ABCMeta):
 
         if args['postgresql']:
             LOG.debug("Using PostgreSQL:")
-            return PostgreSQLServer(friendly_name,
+            return PostgreSQLServer(name_in_log,
                                     model_meta,
                                     migration_root,
                                     args['dbaddress'],
@@ -497,7 +505,7 @@ class SQLServer(metaclass=ABCMeta):
             LOG.debug("Using SQLite:")
             data_file = os.path.abspath(args['sqlite'])
             LOG.debug("Database at %s", data_file)
-            return SQLiteDatabase(friendly_name,
+            return SQLiteDatabase(name_in_log,
                                   data_file,
                                   model_meta,
                                   migration_root,
@@ -509,10 +517,10 @@ class PostgreSQLServer(SQLServer):
     Handler for PostgreSQL.
     """
 
-    def __init__(self, friendly_name, model_meta, migration_root,
+    def __init__(self, name_in_log, model_meta, migration_root,
                  host, port, user, database, password=None,
                  interactive=False, run_env=None):
-        super().__init__(friendly_name, model_meta, migration_root)
+        super().__init__(name_in_log, model_meta, migration_root)
 
         self.host = host
         self.port = port
@@ -605,7 +613,7 @@ class PostgreSQLServer(SQLServer):
 
         return self.check_schema()
 
-    def get_connection_string(self):
+    def get_connection_string(self) -> str:
         return self._get_connection_string(self.database)
 
     def get_db_location(self):
@@ -617,9 +625,9 @@ class SQLiteDatabase(SQLServer):
     Handler for SQLite.
     """
 
-    def __init__(self, friendly_name, data_file, model_meta, migration_root,
+    def __init__(self, name_in_log, data_file, model_meta, migration_root,
                  run_env=None):
-        super().__init__(friendly_name, model_meta, migration_root)
+        super().__init__(name_in_log, model_meta, migration_root)
 
         self.dbpath = data_file
         self.run_env = run_env
@@ -644,7 +652,7 @@ class SQLiteDatabase(SQLServer):
 
         return self.check_schema()
 
-    def get_connection_string(self):
+    def get_connection_string(self) -> str:
         return str(URL('sqlite+pysqlite', None, None, None, None, self.dbpath))
 
     def get_db_location(self):
