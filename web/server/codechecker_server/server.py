@@ -13,7 +13,10 @@ and browser requests.
 
 import atexit
 import datetime
+from functools import partial
 from hashlib import sha256
+from http.server import HTTPServer, BaseHTTPRequestHandler, \
+    SimpleHTTPRequestHandler
 import os
 import posixpath
 from random import sample
@@ -23,12 +26,10 @@ import socket
 import ssl
 import sys
 import stat
+from typing import List, Tuple
 import urllib
 
-from http.server import HTTPServer, BaseHTTPRequestHandler, \
-    SimpleHTTPRequestHandler
 import multiprocess
-
 from sqlalchemy.orm import sessionmaker
 from sqlalchemy.sql.expression import func
 from thrift.protocol import TJSONProtocol
@@ -49,16 +50,12 @@ from codechecker_api.ServerInfo_v6 import \
     serverInfoService as ServerInfoAPI_v6
 
 from codechecker_common.logger import get_logger
+from codechecker_common.compatibility.multiprocessing import \
+    Pool, cpu_count
 
 from codechecker_web.shared.version import get_version_str
 
-from . import instance_manager
-from . import permissions
-from . import routing
-from . import session_manager
-
-from .tmp import get_tmp_dir_hash
-
+from . import instance_manager, permissions, routing, session_manager
 from .api.authentication import ThriftAuthHandler as AuthHandler_v6
 from .api.config_handler import ThriftConfigHandler as ConfigHandler_v6
 from .api.product_server import ThriftProductHandler as ProductHandler_v6
@@ -70,6 +67,8 @@ from .database.config_db_model import Product as ORMProduct, \
     Configuration as ORMConfiguration
 from .database.database import DBSession
 from .database.run_db_model import IDENTIFIER as RUN_META, Run, RunLock
+from .tmp import get_tmp_dir_hash
+
 
 LOG = get_logger('server')
 
@@ -511,14 +510,15 @@ class Product:
     # connect() call so the next could be made.
     CONNECT_RETRY_TIMEOUT = 300
 
-    def __init__(self, orm_object, context, check_env):
+    def __init__(self, id_: int, endpoint: str, display_name: str,
+                 connection_string: str, context, check_env):
         """
         Set up a new managed product object for the configuration given.
         """
-        self.__id = orm_object.id
-        self.__endpoint = orm_object.endpoint
-        self.__connection_string = orm_object.connection
-        self.__display_name = orm_object.display_name
+        self.__id = id_
+        self.__endpoint = endpoint
+        self.__display_name = display_name
+        self.__connection_string = connection_string
         self.__driver_name = None
         self.__context = context
         self.__check_env = check_env
@@ -669,13 +669,28 @@ class Product:
         LOG.info("Garbage collection for product '%s' started...",
                  self.endpoint)
 
-        db_cleanup.remove_expired_run_locks(self.session_factory)
-        db_cleanup.remove_unused_data(self.session_factory)
-        db_cleanup.upgrade_severity_levels(self.session_factory,
+        db_cleanup.remove_expired_run_locks(self)
+        db_cleanup.remove_unused_data(self)
+        db_cleanup.upgrade_severity_levels(self,
                                            self.__context.checker_labels)
 
         LOG.info("Garbage collection finished.")
         return True
+
+
+def _do_run_db_cleanup(context, check_env,
+                       id_: int, endpoint: str, display_name: str,
+                       connection_str: str):
+    # This functions is a concurrent job handler.
+    prod = Product(id_, endpoint, display_name, connection_str,
+                   context, check_env)
+    prod.connect(init_db=False)
+    if prod.db_status != DBStatus.OK:
+        return
+
+    prod.cleanup_run_db()
+
+    prod.teardown()
 
 
 class CCSimpleHttpServer(HTTPServer):
@@ -730,9 +745,22 @@ class CCSimpleHttpServer(HTTPServer):
         cfg_sess.close()
 
         if not skip_db_cleanup:
-            for endpoint, product in self.__products.items():
-                if not product.cleanup_run_db():
-                    LOG.warning("Cleaning database for %s Failed.", endpoint)
+            products_to_cleanup: List[Tuple[int, str, str, str]] = \
+                [(p.id, p.endpoint, p.name,
+                  p.session_factory.kw["bind"].url) for p in
+                 (self.__products[ep] for ep in sorted(self.__products))
+                 if p.db_status == DBStatus.OK]
+            thr_count = min(cpu_count(), len(self.__products))
+            with Pool(max_workers=thr_count) as executor:
+                LOG.info("Performing database cleanup using %d concurrent "
+                         "jobs...", thr_count)
+                for product, _ in \
+                        zip(products_to_cleanup, executor.map(
+                            partial(_do_run_db_cleanup,
+                                    self.context, self.check_env),
+                            *zip(*products_to_cleanup))):
+                    # _do_run_db_cleanup() does not return anything.
+                    pass
 
         try:
             HTTPServer.__init__(self, server_address,
@@ -833,7 +861,10 @@ class CCSimpleHttpServer(HTTPServer):
 
         LOG.debug("Setting up product '%s'", orm_product.endpoint)
 
-        prod = Product(orm_product,
+        prod = Product(orm_product.id,
+                       orm_product.endpoint,
+                       orm_product.display_name,
+                       orm_product.connection,
                        self.context,
                        self.check_env)
 

@@ -3339,8 +3339,8 @@ class ThriftRequestHandler:
         # access timestamp to file entries to delay their removal (and avoid
         # removing frequently accessed files). The same comment applies to
         # removeRun() function.
-        db_cleanup.remove_unused_comments(self._Session)
-        db_cleanup.remove_unused_analysis_info(self._Session)
+        db_cleanup.remove_unused_comments(self._product)
+        db_cleanup.remove_unused_analysis_info(self._product)
 
         return True
 

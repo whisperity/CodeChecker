@@ -29,10 +29,11 @@ RUN_LOCK_TIMEOUT_IN_DATABASE = 30 * 60  # 30 minutes.
 SQLITE_LIMIT_COMPOUND_SELECT = 500
 
 
-def remove_expired_run_locks(session_maker):
-    LOG.debug("Garbage collection of expired run locks started...")
+def remove_expired_run_locks(product):
+    LOG.debug("[%s] Garbage collection of expired run locks started...",
+              product.endpoint)
 
-    with DBSession(session_maker) as session:
+    with DBSession(product.session_factory) as session:
         try:
             locks_expired_at = datetime.now() - timedelta(
                 seconds=RUN_LOCK_TIMEOUT_IN_DATABASE)
@@ -43,14 +44,17 @@ def remove_expired_run_locks(session_maker):
 
             session.commit()
 
-            LOG.debug("Garbage collection of expired run locks finished.")
+            LOG.debug("[%s] Garbage collection of expired run locks "
+                      "finished.", product.endpoint)
         except (sqlalchemy.exc.OperationalError,
                 sqlalchemy.exc.ProgrammingError) as ex:
-            LOG.error("Failed to remove expired run locks: %s", str(ex))
+            LOG.error("[%s] Failed to remove expired run locks: %s",
+                      product.endpoint, str(ex))
 
 
-def remove_unused_files(session_maker):
-    LOG.debug("Garbage collection of dangling files started...")
+def remove_unused_files(product):
+    LOG.debug("[%s] Garbage collection of dangling files started...",
+              product.endpoint)
 
     # File deletion is a relatively slow operation due to database cascades.
     # Removing files in big chunks prevents reaching a potential database
@@ -60,7 +64,7 @@ def remove_unused_files(session_maker):
     # bug_path_events and bug_report_points tables.
     CHUNK_SIZE = 500000
 
-    with DBSession(session_maker) as session:
+    with DBSession(product.session_factory) as session:
         try:
             bpe_files = session.query(BugPathEvent.file_id) \
                 .group_by(BugPathEvent.file_id) \
@@ -88,24 +92,27 @@ def remove_unused_files(session_maker):
 
             session.commit()
 
-            LOG.debug("Garbage collection of dangling files finished.")
+            LOG.debug("[%s] Garbage collection of dangling files finished.",
+                      product.endpoint)
         except (sqlalchemy.exc.OperationalError,
                 sqlalchemy.exc.ProgrammingError) as ex:
-            LOG.error("Failed to remove unused files: %s", str(ex))
+            LOG.error("[%s] Failed to remove unused files: %s",
+                      product.endpoint, str(ex))
 
 
-def remove_unused_data(session_maker):
+def remove_unused_data(product):
     """ Remove dangling data (files, comments, etc.) from the database. """
-    remove_unused_files(session_maker)
-    remove_unused_comments(session_maker)
-    remove_unused_analysis_info(session_maker)
+    remove_unused_files(product)
+    remove_unused_comments(product)
+    remove_unused_analysis_info(product)
 
 
-def remove_unused_comments(session_maker):
+def remove_unused_comments(product):
     """ Remove dangling comments from the database. """
-    LOG.debug("Garbage collection of dangling comments started...")
+    LOG.debug("[%s] Garbage collection of dangling comments started...",
+              product.endpoint)
 
-    with DBSession(session_maker) as session:
+    with DBSession(product.session_factory) as session:
         try:
             report_hashes = session.query(Report.bug_id) \
                 .group_by(Report.bug_id) \
@@ -117,17 +124,19 @@ def remove_unused_comments(session_maker):
 
             session.commit()
 
-            LOG.debug("Garbage collection of dangling comments finished.")
+            LOG.debug("[%s] Garbage collection of dangling comments "
+                      "finished.", product.endpoint)
         except (sqlalchemy.exc.OperationalError,
                 sqlalchemy.exc.ProgrammingError) as ex:
-            LOG.error("Failed to remove dangling comments: %s", str(ex))
+            LOG.error("[%s] Failed to remove dangling comments: %s",
+                      product.endpoint, str(ex))
 
 
-def upgrade_severity_levels(session_maker, checker_labels):
+def upgrade_severity_levels(product, checker_labels):
     """
     Updates the potentially changed severities at the reports.
     """
-    LOG.debug("Upgrading severity levels started...")
+    LOG.debug("[%s] Upgrading severity levels started...", product.endpoint)
 
     severity_map = {}
     for checker in checker_labels.checkers():
@@ -137,7 +146,7 @@ def upgrade_severity_levels(session_maker, checker_labels):
             iter(severity_map.items()), SQLITE_LIMIT_COMPOUND_SELECT):
         severity_map_small = dict(severity_map_small)
 
-        with DBSession(session_maker) as session:
+        with DBSession(product.session_factory) as session:
             try:
                 # Create a sql query from the severity map.
                 severity_map_q = union_all(*[
@@ -172,8 +181,9 @@ def upgrade_severity_levels(session_maker, checker_labels):
                         severity_new = severity_map_small[checker_id]
                         severity_id = Severity._NAMES_TO_VALUES[severity_new]
 
-                        LOG.info("Upgrading severity level of '%s' checker "
-                                 "from %s to %s",
+                        LOG.info("[%s] Upgrading severity level of '%s' "
+                                 "checker from %s to %s",
+                                 product.endpoint,
                                  checker_id,
                                  Severity._VALUES_TO_NAMES[severity_old],
                                  severity_new)
@@ -189,13 +199,15 @@ def upgrade_severity_levels(session_maker, checker_labels):
 
                     session.commit()
 
-                    LOG.debug("Upgrading of severity levels finished...")
+                    LOG.debug("[%s] Upgrading of severity levels finished...",
+                              product.endpoint)
             except (sqlalchemy.exc.OperationalError,
                     sqlalchemy.exc.ProgrammingError) as ex:
-                LOG.error("Failed to upgrade severity levels: %s", str(ex))
+                LOG.error("[%s] Failed to upgrade severity levels: %s",
+                          product.endpoint, str(ex))
 
 
-def remove_unused_analysis_info(session_maker):
+def remove_unused_analysis_info(product):
     """ Remove unused analysis information from the database. """
     # Analysis info deletion is a relatively slow operation due to database
     # cascades. Removing files in smaller chunks prevents reaching a potential
@@ -203,9 +215,10 @@ def remove_unused_analysis_info(session_maker):
     # according to some measurements.
     CHUNK_SIZE = 500
 
-    LOG.debug("Garbage collection of dangling analysis info started...")
+    LOG.debug("[%s] Garbage collection of dangling analysis info started...",
+              product.endpoint)
 
-    with DBSession(session_maker) as session:
+    with DBSession(product.session_factory) as session:
         try:
             to_delete = session.query(AnalysisInfo.id) \
                 .join(
@@ -229,7 +242,9 @@ def remove_unused_analysis_info(session_maker):
                     .delete(synchronize_session=False)
                 session.commit()
 
-            LOG.debug("Garbage collection of dangling analysis info finished.")
+            LOG.debug("[%s] Garbage collection of dangling analysis info "
+                      "finished.", product.endpoint)
         except (sqlalchemy.exc.OperationalError,
                 sqlalchemy.exc.ProgrammingError) as ex:
-            LOG.error("Failed to remove dangling analysis info: %s", str(ex))
+            LOG.error("[%s] Failed to remove dangling analysis info: %s",
+                      product.endpoint, str(ex))
