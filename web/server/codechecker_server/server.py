@@ -26,7 +26,7 @@ import socket
 import ssl
 import sys
 import stat
-from typing import List, Tuple
+from typing import List, Optional, Tuple
 import urllib
 
 import multiprocess
@@ -53,6 +53,7 @@ from codechecker_common.logger import get_logger
 from codechecker_common.compatibility.multiprocessing import \
     Pool, cpu_count
 
+from codechecker_web.shared import database_status
 from codechecker_web.shared.version import get_version_str
 
 from . import instance_manager, permissions, routing, session_manager
@@ -678,19 +679,68 @@ class Product:
         return True
 
 
-def _do_run_db_cleanup(context, check_env,
-                       id_: int, endpoint: str, display_name: str,
-                       connection_str: str):
-    # This functions is a concurrent job handler.
-    prod = Product(id_, endpoint, display_name, connection_str,
-                   context, check_env)
-    prod.connect(init_db=False)
-    if prod.db_status != DBStatus.OK:
-        return
+def _do_db_cleanup(context, check_env,
+                   id_: int, endpoint: str, display_name: str,
+                   connection_str: str) -> Tuple[Optional[bool], str]:
+    # This functions is a concurrent job handler!
+    try:
+        prod = Product(id_, endpoint, display_name, connection_str,
+                       context, check_env)
+        prod.connect(init_db=False)
+        if prod.db_status != DBStatus.OK:
+            status_str = database_status.db_status_msg.get(prod.db_status)
+            return None, \
+                f"Cleanup not attempted, database status is {status_str}"
 
-    prod.cleanup_run_db()
+        prod.cleanup_run_db()
+        prod.teardown()
 
-    prod.teardown()
+        # Result is hard-wired to True, because the db_cleanup routines
+        # swallow and log the potential errors but do not return them.
+        return True, ""
+    except Exception as e:
+        import traceback
+        traceback.print_exc()
+        return False, str(e)
+
+
+def _do_db_cleanups(config_database, context, check_env) \
+        -> Tuple[bool, List[Tuple[str, str]]]:
+    """
+    Performs on-demand start-up database cleanup on all the products present
+    in the ``config_database``.
+
+    Returns whether database clean-up succeeded for all products, and the
+    list of products for which it failed, along with the failure reason.
+    """
+    def _get_products() -> List[Product]:
+        products = list()
+        cfg_engine = config_database.create_engine()
+        cfg_session_factory = sessionmaker(bind=cfg_engine)
+        with DBSession(cfg_session_factory) as cfg_db:
+            for row in cfg_db.query(ORMProduct).all():
+                products.append((row.id, row.endpoint, row.display_name,
+                                 row.connection))
+        cfg_engine.dispose()
+        return products
+
+    products = _get_products()
+    thr_count = min(cpu_count(), len(products))
+    overall_result, failures = True, list()
+    with Pool(max_workers=thr_count) as executor:
+        LOG.info("Performing database cleanup using %d concurrent jobs...",
+                 thr_count)
+        for product, result in \
+                zip(products, executor.map(
+                    partial(_do_db_cleanup, context, check_env),
+                    *zip(*products))):
+            success, reason = result
+            if not success:
+                _, endpoint, _, _ = product
+                overall_result = False
+                failures.append((endpoint, reason))
+
+    return overall_result, failures
 
 
 class CCSimpleHttpServer(HTTPServer):
@@ -706,7 +756,6 @@ class CCSimpleHttpServer(HTTPServer):
                  RequestHandlerClass,
                  config_directory,
                  product_db_sql_server,
-                 skip_db_cleanup,
                  pckg_data,
                  context,
                  check_env,
@@ -743,24 +792,6 @@ class CCSimpleHttpServer(HTTPServer):
             })
         cfg_sess.commit()
         cfg_sess.close()
-
-        if not skip_db_cleanup:
-            products_to_cleanup: List[Tuple[int, str, str, str]] = \
-                [(p.id, p.endpoint, p.name,
-                  p.session_factory.kw["bind"].url) for p in
-                 (self.__products[ep] for ep in sorted(self.__products))
-                 if p.db_status == DBStatus.OK]
-            thr_count = min(cpu_count(), len(self.__products))
-            with Pool(max_workers=thr_count) as executor:
-                LOG.info("Performing database cleanup using %d concurrent "
-                         "jobs...", thr_count)
-                for product, _ in \
-                        zip(products_to_cleanup, executor.map(
-                            partial(_do_run_db_cleanup,
-                                    self.context, self.check_env),
-                            *zip(*products_to_cleanup))):
-                    # _do_run_db_cleanup() does not return anything.
-                    pass
 
         try:
             HTTPServer.__init__(self, server_address,
@@ -1014,7 +1045,7 @@ def __make_root_file(root_file):
 
 
 def start_server(config_directory, package_data, port, config_sql_server,
-                 listen_address, force_auth, skip_db_cleanup,
+                 listen_address, force_auth, skip_db_cleanup: bool,
                  context, check_env):
     """
     Start http server to handle web client and thrift requests.
@@ -1074,6 +1105,20 @@ def start_server(config_directory, package_data, port, config_sql_server,
         LOG.error("The server's configuration file is invalid!")
         sys.exit(1)
 
+    if not skip_db_cleanup:
+        all_success, fails = _do_db_cleanups(config_sql_server,
+                                             context,
+                                             check_env)
+        if not all_success:
+            LOG.error("Failed to perform automatic cleanup on %d products! "
+                      "Earlier logs might contain additional detailed "
+                      "reasoning.\n\t* %s", len(fails),
+                      "\n\t* ".join(
+                        ("'%s' (%s)" % (ep, reason) for (ep, reason) in fails)
+                      ))
+    else:
+        LOG.debug("Skipping db_cleanup, as requested.")
+
     server_clazz = CCSimpleHttpServer
     if ':' in server_addr[0]:
         # IPv6 address specified for listening.
@@ -1085,7 +1130,6 @@ def start_server(config_directory, package_data, port, config_sql_server,
                                RequestHandler,
                                config_directory,
                                config_sql_server,
-                               skip_db_cleanup,
                                package_data,
                                context,
                                check_env,

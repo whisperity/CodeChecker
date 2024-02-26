@@ -737,7 +737,6 @@ def __db_migration_multiple(
                         # and immediately unpack it, thus providing the other
                         # 3 arguments of __db_migration as a parameter pack.
                         *zip(*scheduled_upgrades_or_inits))):
-
                 if return_status != DBStatus.OK:
                     failed_products.append((product_cfg[0], return_status))
 
