@@ -723,7 +723,8 @@ def __db_migration_multiple(
 
     if scheduled_upgrades_or_inits:
         failed_products: List[Tuple[str, DBStatus]] = list()
-        thr_count = min(cpu_count(), len(scheduled_upgrades_or_inits))
+        thr_count = util.clamp(1, len(scheduled_upgrades_or_inits),
+                               cpu_count())
         with Pool(max_workers=thr_count) as executor:
             LOG.info("Initialising/upgrading products using %d concurrent "
                      "jobs...", thr_count)

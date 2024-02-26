@@ -49,6 +49,7 @@ from codechecker_api.ProductManagement_v6 import \
 from codechecker_api.ServerInfo_v6 import \
     serverInfoService as ServerInfoAPI_v6
 
+from codechecker_common import util
 from codechecker_common.logger import get_logger
 from codechecker_common.compatibility.multiprocessing import \
     Pool, cpu_count
@@ -725,7 +726,10 @@ def _do_db_cleanups(config_database, context, check_env) \
         return products
 
     products = _get_products()
-    thr_count = min(cpu_count(), len(products))
+    if not products:
+        return True, list()
+
+    thr_count = util.clamp(1, len(products), cpu_count())
     overall_result, failures = True, list()
     with Pool(max_workers=thr_count) as executor:
         LOG.info("Performing database cleanup using %d concurrent jobs...",
