@@ -11,8 +11,8 @@ Util module.
 import itertools
 import json
 from math import ceil
-from typing import Callable, TextIO
 import os
+from typing import Callable, TextIO
 
 import portalocker
 
@@ -33,6 +33,15 @@ def arg_match(options, args):
             continue
 
     return matched_args
+
+
+def clamp(min_: int, value: int, max_: int) -> int:
+    """
+    Clamps ``value`` to be between ``min_`` and ``max_``, inclusive.
+    """
+    if min_ > max_:
+        raise ValueError("min <= value <= max required")
+    return min(max(min_, value), max_)
 
 
 def chunks(iterator, n):
