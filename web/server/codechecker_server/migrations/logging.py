@@ -18,6 +18,8 @@ class MigrationFormatter(logging.Formatter):
     def __init__(self, schema: str):
         super().__init__(fmt="[%(levelname)s][%(asctime)s] "
                              "{migration/%(schema)s} "
+                             "[%(database)s] "
+                             "- %(revision)s:%(lineno)d "
                              "- %(message)s",
                          datefmt="%Y-%m-%d %H:%M:%S")
         self.schema = schema

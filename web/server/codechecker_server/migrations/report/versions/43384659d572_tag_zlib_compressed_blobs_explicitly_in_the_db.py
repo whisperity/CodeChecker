@@ -1,19 +1,12 @@
-"""Tag zlib-compressed BLOBs explicitly in the DB
+"""
+Tag zlib-compressed BLOBs explicitly in the DB
 
 Revision ID: 43384659d572
-Revises: 9d956a0fae8d
+Revises:     9d956a0fae8d
 Create Date: 2024-02-15 16:37:49.828470
-
 """
 
-# revision identifiers, used by Alembic.
-revision = '43384659d572'
-down_revision = '9d956a0fae8d'
-branch_labels = None
-depends_on = None
-
 from datetime import datetime
-now = datetime.now
 
 import json
 from logging import getLogger
@@ -29,6 +22,15 @@ from codechecker_common.util import progress
 
 from codechecker_server.database.types import zlib as db_zlib
 from codechecker_server.migrations.type_support import zlib as migrate_zlib
+
+
+# Revision identifiers, used by Alembic.
+revision = '43384659d572'
+down_revision = '9d956a0fae8d'
+branch_labels = None
+depends_on = None
+
+now = datetime.now
 
 
 ZBlob = db_zlib.ZLibCompressedBlob()
