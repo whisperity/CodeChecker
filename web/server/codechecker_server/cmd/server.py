@@ -13,22 +13,27 @@ servers, which are used to query analysis report information.
 
 import argparse
 import errno
+from functools import partial
 import os
 import signal
 import socket
 import sys
 import time
+from typing import List, Optional, Tuple
 
-import psutil
 from alembic import config
 from alembic import script
+from alembic.util import CommandError
+import psutil
+from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.orm import sessionmaker
 
 from codechecker_api_shared.ttypes import DBStatus
 
 from codechecker_report_converter import twodim
 
-from codechecker_common import arg, logger, util, cmd_config
+from codechecker_common import arg, cmd_config, logger, util
+from codechecker_common.compatibility.multiprocessing import Pool, cpu_count
 
 from codechecker_server import instance_manager, server
 from codechecker_server.database import database
@@ -471,18 +476,24 @@ def check_product_db_status(cfg_sql_server, migration_root, environ):
 
     :returns: dictionary of product endpoints with database statuses
     """
-
     engine = cfg_sql_server.create_engine()
     config_session = sessionmaker(bind=engine)
     sess = config_session()
 
+    products: List[ORMProduct] = list()
     try:
-        products = sess.query(ORMProduct).all()
+        products = sess.query(ORMProduct) \
+            .order_by(ORMProduct.endpoint.asc()) \
+            .all()
     except Exception as ex:
         LOG.debug(ex)
         LOG.error("Failed to get product configurations from the database.")
         LOG.error("Please check your command arguments.")
         sys.exit(1)
+    finally:
+        # sys.exit raises SystemExit, which still performs finally clauses!
+        sess.close()
+        engine.dispose()
 
     package_schema = get_schema_version_from_package(migration_root)
 
@@ -494,26 +505,32 @@ def check_product_db_status(cfg_sql_server, migration_root, environ):
     prod_status = {}
     for pd in products:
         db = database.SQLServer.from_connection_string(pd.connection,
+                                                       pd.endpoint,
                                                        RUN_META,
                                                        migration_root,
                                                        interactive=False,
                                                        env=environ)
         db_location = db.get_db_location()
-        ret = db.connect()
-        s_ver = db.get_schema_version()
-        if s_ver in db_errors:
-            s_ver = None
-        prod_status[pd.endpoint] = (ret, s_ver, package_schema, db_location)
 
-    sess.commit()
-    sess.close()
-    engine.dispose()
+        try:
+            status = db.connect()
+            s_ver = db.get_schema_version()
+            if s_ver in db_errors:
+                s_ver = None
+            prod_status[pd.endpoint] = (status, s_ver, package_schema,
+                                        db_location)
+        except Exception:
+            LOG.error("Unable to get the status for product '%s', "
+                      "considering as if the connection failed.",
+                      pd.endpoint)
+            prod_status[pd.endpoint] = (DBStatus.FAILED_TO_CONNECT, None,
+                                        package_schema, db_location)
 
     return prod_status
 
 
 def __db_status_check(cfg_sql_server, migration_root, environ,
-                      product_name=None):
+                      product_name=None) -> int:
     """
     Check and print database statuses for the given product.
     """
@@ -525,7 +542,7 @@ def __db_status_check(cfg_sql_server, migration_root, environ,
     prod_statuses = check_product_db_status(cfg_sql_server, migration_root,
                                             environ)
 
-    if product_name != 'all':
+    if product_name != "all":
         avail = prod_statuses.get(product_name)
         if not avail:
             LOG.error("No product was found with this endpoint: %s",
@@ -539,85 +556,211 @@ def __db_status_check(cfg_sql_server, migration_root, environ,
     return 0
 
 
-def __db_migration(cfg_sql_server, migration_root, environ,
-                   product_to_upgrade='all', force_upgrade=False):
-    """
-    Handle database management.
-    Schema checking and migration.
-    """
-    LOG.info("Preparing schema upgrade for %s", str(product_to_upgrade))
-    product_name = product_to_upgrade
+class NonExistentProductError(Exception):
+    def __init__(self, product_name):
+        super().__init__(f"Non-existent product '{product_name}'")
+        self.product_name = product_name
 
-    prod_statuses = check_product_db_status(cfg_sql_server,
-                                            migration_root,
-                                            environ)
-    prod_to_upgrade = []
 
-    if product_name != 'all':
-        avail = prod_statuses.get(product_name)
-        if not avail:
-            LOG.error("No product was found with this endpoint: %s",
-                      product_name)
-            return 1
-        prod_to_upgrade.append(product_name)
-    else:
-        prod_to_upgrade = list(prod_statuses.keys())
-
-    LOG.warning("Please note after migration only "
-                "newer CodeChecker versions can be used "
-                "to start the server")
-    LOG.warning("It is advised to make a full backup of your "
-                "run databases.")
-
-    for prod in prod_to_upgrade:
-        LOG.info("========================")
-        LOG.info("Checking: %s", prod)
-        engine = cfg_sql_server.create_engine()
-        config_session = sessionmaker(bind=engine)
-        sess = config_session()
-
-        product = sess.query(ORMProduct).filter(
-                ORMProduct.endpoint == prod).first()
-        db = database.SQLServer.from_connection_string(product.connection,
+def __db_migration(migration_root,
+                   environ,
+                   endpoint: str,
+                   connection_string: str,
+                   init_instead_of_upgrade: bool) -> DBStatus:
+    try:
+        db = database.SQLServer.from_connection_string(connection_string,
+                                                       endpoint,
                                                        RUN_META,
                                                        migration_root,
                                                        interactive=False,
                                                        env=environ)
+        if init_instead_of_upgrade:
+            LOG.info("[%s] Initialising...", endpoint)
+            status = db.connect(init=True)
+        else:
+            LOG.info("[%s] Upgrading...", endpoint)
+            db.connect(init=False)
+            status = db.upgrade()
 
-        db_status = db.connect()
+        status_str = database_status.db_status_msg.get(
+            status, "Unknown database status")
+        LOG.info("[%s] Done %s. %s", endpoint,
+                 "initialising" if init_instead_of_upgrade else "upgrading",
+                 status_str)
+        return status
+    except (CommandError, SQLAlchemyError):
+        LOG.error("A database error occurred during the preparation for "
+                  "the init/migration of '%s'", endpoint)
+        import traceback
+        traceback.print_exc()
+        return DBStatus.SCHEMA_INIT_ERROR if init_instead_of_upgrade \
+            else DBStatus.SCHEMA_UPGRADE_FAILED
+    except Exception as e:
+        LOG.error("A generic error '%s' occurred during the init/migration "
+                  "of '%s'", str(type(e)), endpoint)
+        import traceback
+        traceback.print_exc()
+        return DBStatus.SCHEMA_INIT_ERROR if init_instead_of_upgrade \
+            else DBStatus.SCHEMA_UPGRADE_FAILED
 
-        msg = database_status.db_status_msg.get(db_status,
-                                                'Unknown database status')
 
-        LOG.info(msg)
-        if db_status == DBStatus.SCHEMA_MISSING:
-            question = 'Do you want to initialize a new schema for ' \
-                        + product.endpoint + '? Y(es)/n(o) '
-            if force_upgrade or env.get_user_input(question):
-                ret = db.connect(init=True)
-                msg = database_status.db_status_msg.get(
-                    ret, 'Unknown database status')
-                LOG.info(msg)
-            else:
-                LOG.info("No schema initialization was done.")
+def __db_migration_multiple(
+    cfg_sql_server, migration_root, environ,
+    products_requested_for_upgrade: Optional[List[str]] = None,
+    force_upgrade: bool = False
+) -> int:
+    """
+    Migrates the schema for the product database
+    ``products_requested_for_upgrade`` if specified, or all configurated
+    products (default).
+    """
+    LOG.info("Preparing schema upgrade for '%s'",
+             "', '".join(products_requested_for_upgrade)
+             if products_requested_for_upgrade else "<all products>")
 
-        elif db_status == DBStatus.SCHEMA_MISMATCH_OK:
-            question = 'Do you want to upgrade to new schema for ' \
-                        + product.endpoint + '? Y(es)/n(o) '
-            if force_upgrade or env.get_user_input(question):
-                LOG.info("Upgrading schema ...")
-                ret = db.upgrade()
-                LOG.info("Done.")
-                msg = database_status.db_status_msg.get(
-                    ret, 'Unknown database status')
-                LOG.info(msg)
-            else:
-                LOG.info("No schema migration was done.")
+    prod_statuses = check_product_db_status(cfg_sql_server,
+                                            migration_root,
+                                            environ)
+    products_to_upgrade: List[str] = list()
+    for endpoint in (products_requested_for_upgrade or []):
+        avail = prod_statuses.get(endpoint)
+        if not avail:
+            LOG.error("No product was found with endpoint '%s'", endpoint)
+            return 1
+        products_to_upgrade.append(endpoint)
+    else:
+        products_to_upgrade = list(prod_statuses.keys())
+    products_to_upgrade.sort()
 
-        sess.commit()
-        sess.close()
-        engine.dispose()
-        LOG.info("========================")
+    LOG.warning("Please note after migration only newer CodeChecker versions "
+                "can be used to start the server!")
+    LOG.warning("It is advised to make a full backup of your run databases.")
+
+    LOG.info("========================")
+    scheduled_upgrades_or_inits: List[Tuple[str, str, bool]] = list()
+    for endpoint in products_to_upgrade:
+        LOG.info("Checking: %s", endpoint)
+        connection_str = None
+        try:
+            # Obtain the configuration information for the current product.
+            engine = cfg_sql_server.create_engine()
+            config_session = sessionmaker(bind=engine)
+            sess = config_session()
+            product = sess.query(ORMProduct.connection) \
+                .filter(ORMProduct.endpoint == endpoint) \
+                .first()
+            if product is None:
+                raise NonExistentProductError(endpoint)
+
+            connection_str = product.connection
+
+            # Close the connection to the CONFIG database. It is not needed
+            # anymore, but an intermittent timeout would cause scary
+            # exceptions if the migration itself is running too long.
+            sess.close()
+            engine.dispose()
+        except NonExistentProductError as nepe:
+            LOG.error("Attempted to upgrade product '%s', but it was not "
+                      "found in the server's configuration database.",
+                      nepe.product_name)
+            connection_str = None
+        except Exception:
+            LOG.error("Failed to get the configuration for product '%s'",
+                      endpoint)
+            import traceback
+            traceback.print_exc()
+            connection_str = None
+
+        if not connection_str:
+            continue
+
+        try:
+            db = database.SQLServer.from_connection_string(connection_str,
+                                                           endpoint,
+                                                           RUN_META,
+                                                           migration_root,
+                                                           interactive=False,
+                                                           env=environ)
+            db_status = db.connect()
+
+            status_str = database_status.db_status_msg.get(
+                db_status, "Unknown database status")
+            LOG.info(status_str)
+
+            if db_status == DBStatus.SCHEMA_MISSING:
+                question = "Do you want to initialize a new schema for '" \
+                           f"'{endpoint}'" \
+                           "? Y(es)/n(o) "
+                if force_upgrade or env.get_user_input(question):
+                    LOG.info("[%s] Schema will be initialised...", endpoint)
+                    scheduled_upgrades_or_inits.append((endpoint,
+                                                        connection_str,
+                                                        True))
+                else:
+                    LOG.info("[%s] No schema initialization will be done.",
+                             endpoint)
+            elif db_status == DBStatus.SCHEMA_MISMATCH_OK:
+                question = f"Do you want to upgrade '{endpoint}' to new " \
+                           "schema? Y(es)/n(o) "
+                if force_upgrade or env.get_user_input(question):
+                    LOG.info("[%s] Schema will be upgraded...", endpoint)
+                    scheduled_upgrades_or_inits.append((endpoint,
+                                                        connection_str,
+                                                        False))
+                else:
+                    LOG.info("[%s] No schema migration will be done.",
+                             endpoint)
+        except (CommandError, SQLAlchemyError):
+            LOG.error("A database error occurred during the preparation for "
+                      "the init/migration of '%s'", endpoint)
+            import traceback
+            traceback.print_exc()
+        except Exception as e:
+            LOG.error("A generic error '%s' occurred during the "
+                      "preparation for the init/migration of '%s'",
+                      str(type(e)), endpoint)
+            import traceback
+            traceback.print_exc()
+
+    LOG.info("========================")
+
+    if scheduled_upgrades_or_inits:
+        failed_products: List[Tuple[str, DBStatus]] = list()
+        thr_count = util.clamp(1, len(scheduled_upgrades_or_inits),
+                               cpu_count())
+        with Pool(max_workers=thr_count) as executor:
+            LOG.info("Initialising/upgrading products using %d concurrent "
+                     "jobs...", thr_count)
+            for product_cfg, return_status in \
+                    zip(scheduled_upgrades_or_inits, executor.map(
+                        # Bind the first 2 non-changing arguments of
+                        # __db_migration, this is fixed for the execution.
+                        partial(__db_migration, migration_root, environ),
+                        # Transform List[Tuple[str, str, bool]] into an
+                        # Iterable[Tuple[str], Tuple[str], Tuple[bool]],
+                        # and immediately unpack it, thus providing the other
+                        # 3 arguments of __db_migration as a parameter pack.
+                        *zip(*scheduled_upgrades_or_inits))):
+                if return_status != DBStatus.OK:
+                    failed_products.append((product_cfg[0], return_status))
+
+        if failed_products:
+            LOG.error("The following products failed to upgrade: %s",
+                      ", ".join(list(map(lambda p: "'%s' (%s)" %
+                                         (p[0],
+                                          database_status.db_status_msg.get(
+                                              p[1], "Unknown database status")
+                                          ),
+                                         failed_products))))
+        else:
+            LOG.info("Schema initialisation(s)/upgrade(s) executed "
+                     "successfully.")
+
+    LOG.info("========================")
+
+    # This function always returns 0 if the upgrades were attempted, because
+    # the server can start with some products that have failed to init/migrate.
+    # It will just simply disallow the connection to those products.
     return 0
 
 
@@ -812,7 +955,7 @@ def server_init_start(args):
                          context.ld_lib_path_extra)
 
     cfg_sql_server = database.SQLServer.from_cmdline_args(
-        vars(args), CONFIG_META, context.config_migration_root,
+        vars(args), "config", CONFIG_META, context.config_migration_root,
         interactive=True, env=environ)
 
     LOG.info("Checking configuration database ...")
@@ -836,27 +979,25 @@ def server_init_start(args):
     force_upgrade = True if 'force_upgrade' in args else False
 
     if db_status == DBStatus.SCHEMA_MISMATCH_OK:
-        LOG.debug("Configuration database schema mismatch.")
+        LOG.debug("Configuration database schema mismatch!")
         LOG.debug("Schema upgrade is possible.")
-        LOG.warning("Please note after migration only "
-                    "newer CodeChecker versions can be used "
-                    "to start the server")
+        LOG.warning("Please note after migration only newer CodeChecker "
+                    "versions can be used to start the server!")
         LOG.warning("It is advised to make a full backup of your "
-                    "configuration database")
-
+                    "configuration database!")
         LOG.warning(cfg_sql_server.get_db_location())
 
-        question = 'Do you want to upgrade to the new schema?' \
-                   ' Y(es)/n(o) '
+        question = "Do you want to upgrade to the new schema?" \
+                   " Y(es)/n(o) "
         if force_upgrade or env.get_user_input(question):
-            print("Upgrading schema ...")
-            ret = cfg_sql_server.upgrade()
-            msg = database_status.db_status_msg.get(
-                ret, 'Unknown database status')
-            print(msg)
-            if ret != DBStatus.OK:
+            LOG.info("Upgrading schema ...")
+            new_status = cfg_sql_server.upgrade()
+            status_str = database_status.db_status_msg.get(
+                new_status, "Unknown database status")
+            LOG.info(status_str)
+            if new_status != DBStatus.OK:
                 LOG.error("Schema migration failed")
-                sys.exit(ret)
+                sys.exit(new_status)
         else:
             LOG.info("No schema migration was done.")
             sys.exit(0)
@@ -870,17 +1011,23 @@ def server_init_start(args):
     # statuses can be checked.
     try:
         if args.status:
-            ret = __db_status_check(cfg_sql_server, context.migration_root,
-                                    environ, args.status)
+            ret = __db_status_check(cfg_sql_server,
+                                    context.migration_root,
+                                    environ,
+                                    args.status)
             sys.exit(ret)
     except AttributeError:
         LOG.debug('Status was not in the arguments.')
 
     try:
         if args.product_to_upgrade:
-            ret = __db_migration(cfg_sql_server, context.migration_root,
-                                 environ, args.product_to_upgrade,
-                                 force_upgrade)
+            ret = __db_migration_multiple(
+                cfg_sql_server,
+                context.migration_root,
+                environ,
+                [args.product_to_upgrade]
+                if args.product_to_upgrade != "all" else None,
+                force_upgrade)
             sys.exit(ret)
     except AttributeError:
         LOG.debug('Product upgrade was not in the arguments.')
@@ -894,12 +1041,11 @@ def server_init_start(args):
 
     if create_default_product:
         # Create a default product and add it to the configuration database.
-
         LOG.debug("Create default product...")
         LOG.debug("Configuring schema and migration...")
 
         prod_server = database.SQLiteDatabase(
-            default_product_path, RUN_META,
+            "Default", default_product_path, RUN_META,
             context.run_migration_root, environ)
 
         LOG.debug("Checking 'Default' product database.")
@@ -933,8 +1079,11 @@ def server_init_start(args):
     if upgrade_available:
         print_prod_status(prod_statuses)
         LOG.warning("Multiple products can be upgraded, make a backup!")
-        __db_migration(cfg_sql_server, context.run_migration_root,
-                       environ, 'all', force_upgrade)
+        __db_migration_multiple(cfg_sql_server,
+                                context.run_migration_root,
+                                environ,
+                                None,
+                                force_upgrade)
 
     prod_statuses = check_product_db_status(cfg_sql_server,
                                             context.run_migration_root,
@@ -949,11 +1098,11 @@ def server_init_start(args):
         break
 
     if non_ok_db:
-        msg = "There are some database issues. " \
-              "Do you want to start the " \
-              "server? Y(es)/n(o) "
-        if not env.get_user_input(msg):
-            sys.exit(1)
+        LOG.error("There are some database issues.")
+        if not force_upgrade:
+            status_str = "Do you want to start the server? Y(es)/n(o) "
+            if not env.get_user_input(status_str):
+                sys.exit(1)
 
     # Start database viewer.
     package_data = {'www_root': context.www_root,
