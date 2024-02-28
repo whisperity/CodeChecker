@@ -63,5 +63,5 @@ def run_migrations_online():
 
 
 if context.is_offline_mode():
-    raise NotImplementedError("Offline 'report' migration is not possible!")
+    raise NotImplementedError("Offline 'config' migration is not possible!")
 run_migrations_online()

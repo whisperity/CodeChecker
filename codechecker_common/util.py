@@ -40,7 +40,7 @@ def clamp(min_: int, value: int, max_: int) -> int:
     Clamps ``value`` to be between ``min_`` and ``max_``, inclusive.
     """
     if min_ > max_:
-        raise ValueError("min <= value <= max required")
+        raise ValueError("min <= max required")
     return min(max(min_, value), max_)
 
 

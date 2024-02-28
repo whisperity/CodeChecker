@@ -668,15 +668,14 @@ class Product:
         """
         Cleanup the run database which belongs to this product.
         """
-        LOG.info("Garbage collection for product '%s' started...",
-                 self.endpoint)
+        LOG.info("[%s] Garbage collection for started...", self.endpoint)
 
         db_cleanup.remove_expired_run_locks(self)
         db_cleanup.remove_unused_data(self)
         db_cleanup.upgrade_severity_levels(self,
                                            self.__context.checker_labels)
 
-        LOG.info("Garbage collection finished.")
+        LOG.info("[%s] Garbage collection finished.", self.endpoint)
         return True
 
 
@@ -691,7 +690,7 @@ def _do_db_cleanup(context, check_env,
         if prod.db_status != DBStatus.OK:
             status_str = database_status.db_status_msg.get(prod.db_status)
             return None, \
-                f"Cleanup not attempted, database status is {status_str}"
+                f"Cleanup not attempted, database status is \"{status_str}\""
 
         prod.cleanup_run_db()
         prod.teardown()
@@ -719,7 +718,9 @@ def _do_db_cleanups(config_database, context, check_env) \
         cfg_engine = config_database.create_engine()
         cfg_session_factory = sessionmaker(bind=cfg_engine)
         with DBSession(cfg_session_factory) as cfg_db:
-            for row in cfg_db.query(ORMProduct).all():
+            for row in cfg_db.query(ORMProduct) \
+                    .order_by(ORMProduct.endpoint.asc()) \
+                    .all():
                 products.append((row.id, row.endpoint, row.display_name,
                                  row.connection))
         cfg_engine.dispose()

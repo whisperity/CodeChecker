@@ -4,7 +4,6 @@ Add description for run_history
 Revision ID: 5f8a443a51e5
 Revises:     a79677f54e48
 Create Date: 2020-04-09 09:52:52.336709
-
 """
 
 from alembic import op

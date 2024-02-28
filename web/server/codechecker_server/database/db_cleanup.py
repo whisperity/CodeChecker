@@ -30,10 +30,9 @@ SQLITE_LIMIT_COMPOUND_SELECT = 500
 
 
 def remove_expired_run_locks(product):
-    LOG.debug("[%s] Garbage collection of expired run locks started...",
-              product.endpoint)
-
     with DBSession(product.session_factory) as session:
+        LOG.debug("[%s] Garbage collection of expired run locks started...",
+                  product.endpoint)
         try:
             locks_expired_at = datetime.now() - timedelta(
                 seconds=RUN_LOCK_TIMEOUT_IN_DATABASE)
@@ -53,9 +52,6 @@ def remove_expired_run_locks(product):
 
 
 def remove_unused_files(product):
-    LOG.debug("[%s] Garbage collection of dangling files started...",
-              product.endpoint)
-
     # File deletion is a relatively slow operation due to database cascades.
     # Removing files in big chunks prevents reaching a potential database
     # statement timeout. This hard-coded value is a safe choice according to
@@ -63,8 +59,9 @@ def remove_unused_files(product):
     # the long terms we are planning to reduce cascade deletes by redesigning
     # bug_path_events and bug_report_points tables.
     CHUNK_SIZE = 500000
-
     with DBSession(product.session_factory) as session:
+        LOG.debug("[%s] Garbage collection of dangling files started...",
+                  product.endpoint)
         try:
             bpe_files = session.query(BugPathEvent.file_id) \
                 .group_by(BugPathEvent.file_id) \
@@ -101,18 +98,15 @@ def remove_unused_files(product):
 
 
 def remove_unused_data(product):
-    """ Remove dangling data (files, comments, etc.) from the database. """
     remove_unused_files(product)
     remove_unused_comments(product)
     remove_unused_analysis_info(product)
 
 
 def remove_unused_comments(product):
-    """ Remove dangling comments from the database. """
-    LOG.debug("[%s] Garbage collection of dangling comments started...",
-              product.endpoint)
-
     with DBSession(product.session_factory) as session:
+        LOG.debug("[%s] Garbage collection of dangling comments started...",
+                  product.endpoint)
         try:
             report_hashes = session.query(Report.bug_id) \
                 .group_by(Report.bug_id) \
@@ -208,17 +202,14 @@ def upgrade_severity_levels(product, checker_labels):
 
 
 def remove_unused_analysis_info(product):
-    """ Remove unused analysis information from the database. """
     # Analysis info deletion is a relatively slow operation due to database
     # cascades. Removing files in smaller chunks prevents reaching a potential
     # database statement timeout. This hard-coded value is a safe choice
     # according to some measurements.
     CHUNK_SIZE = 500
-
-    LOG.debug("[%s] Garbage collection of dangling analysis info started...",
-              product.endpoint)
-
     with DBSession(product.session_factory) as session:
+        LOG.debug("[%s] Garbage collection of dangling analysis info "
+                  "started...", product.endpoint)
         try:
             to_delete = session.query(AnalysisInfo.id) \
                 .join(

@@ -575,16 +575,18 @@ def __db_migration(migration_root,
                                                        interactive=False,
                                                        env=environ)
         if init_instead_of_upgrade:
-            LOG.info("%s: Initialising...", endpoint)
+            LOG.info("[%s] Initialising...", endpoint)
             status = db.connect(init=True)
         else:
-            LOG.info("%s: Upgrading...", endpoint)
+            LOG.info("[%s] Upgrading...", endpoint)
             db.connect(init=False)
             status = db.upgrade()
 
         status_str = database_status.db_status_msg.get(
             status, "Unknown database status")
-        LOG.info("%s: Done. %s", endpoint, status_str)
+        LOG.info("[%s] Done %s. %s", endpoint,
+                 "initialising" if init_instead_of_upgrade else "upgrading",
+                 status_str)
         return status
     except (CommandError, SQLAlchemyError):
         LOG.error("A database error occurred during the preparation for "
@@ -633,12 +635,10 @@ def __db_migration_multiple(
     LOG.warning("Please note after migration only newer CodeChecker versions "
                 "can be used to start the server!")
     LOG.warning("It is advised to make a full backup of your run databases.")
-
+    LOG.info("========================")
     scheduled_upgrades_or_inits: List[Tuple[str, str, bool]] = list()
     for endpoint in products_to_upgrade:
-        LOG.info("========================")
         LOG.info("Checking: %s", endpoint)
-
         connection_str = None
         try:
             # Obtain the configuration information for the current product.
@@ -671,7 +671,6 @@ def __db_migration_multiple(
             connection_str = None
 
         if not connection_str:
-            LOG.info("========================")
             continue
 
         try:
@@ -688,25 +687,28 @@ def __db_migration_multiple(
             LOG.info(status_str)
 
             if db_status == DBStatus.SCHEMA_MISSING:
-                question = "Do you want to initialize a new schema for " \
-                            + endpoint + "? Y(es)/n(o) "
+                question = "Do you want to initialize a new schema for '" \
+                           f"'{endpoint}'" \
+                           "? Y(es)/n(o) "
                 if force_upgrade or env.get_user_input(question):
-                    LOG.info("Schema will be initialised...")
+                    LOG.info("[%s] Schema will be initialised...", endpoint)
                     scheduled_upgrades_or_inits.append((endpoint,
                                                         connection_str,
                                                         True))
                 else:
-                    LOG.info("No schema initialization will be done.")
+                    LOG.info("[%s] No schema initialization will be done.",
+                             endpoint)
             elif db_status == DBStatus.SCHEMA_MISMATCH_OK:
-                question = "Do you want to upgrade to new schema for " \
-                            + endpoint + "? Y(es)/n(o) "
+                question = f"Do you want to upgrade '{endpoint}' to new " \
+                           "schema? Y(es)/n(o) "
                 if force_upgrade or env.get_user_input(question):
-                    LOG.info("Schema will be upgraded...")
+                    LOG.info("[%s] Schema will be upgraded...", endpoint)
                     scheduled_upgrades_or_inits.append((endpoint,
                                                         connection_str,
                                                         False))
                 else:
-                    LOG.info("No schema migration will be done.")
+                    LOG.info("[%s] No schema migration will be done.",
+                             endpoint)
         except (CommandError, SQLAlchemyError):
             LOG.error("A database error occurred during the preparation for "
                       "the init/migration of '%s'", endpoint)
@@ -719,7 +721,7 @@ def __db_migration_multiple(
             import traceback
             traceback.print_exc()
 
-        LOG.info("========================")
+    LOG.info("========================")
 
     if scheduled_upgrades_or_inits:
         failed_products: List[Tuple[str, DBStatus]] = list()
@@ -750,7 +752,10 @@ def __db_migration_multiple(
                                           ),
                                          failed_products))))
         else:
-            LOG.info("Schema initialisation/upgrade executed successfully.")
+            LOG.info("Schema initialisation(s)/upgrade(s) executed "
+                     "successfully.")
+
+    LOG.info("========================")
 
     # This function always returns 0 if the upgrades were attempted, because
     # the server can start with some products that have failed to init/migrate.
