@@ -10,11 +10,10 @@ from datetime import datetime
 
 import json
 from logging import getLogger
-from typing import Any, Callable, Dict, List, Optional, cast
+from typing import List, cast
 import zlib
 
 from alembic import op
-import sqlalchemy as sa
 from sqlalchemy.orm import Session
 from sqlalchemy.ext.automap import automap_base
 
@@ -229,7 +228,7 @@ def upgrade():
                                 "took %s, original *COMPRESSED* size %s, "
                                 "new *COMPRESSED+TAGGED* size %s",
                                 "file_contents", "blame_info",
-                                content_hash, (end - start)
+                                content_hash, (end - start),
                                 len(blame_info), len(new_blame_info))
 
                 ret["blame_info"] = new_blame_info
