@@ -151,8 +151,14 @@ def upgrade():
             new_analyzer_command = to_z_str(analyzer_command)
             end = now()
             if (end - start).total_seconds() > 1:
-                LOG.warning("Migrate '%s'.'%s' (ID = %s): took %s, original *COMPRESSED* size %s, new *COMPRESSED+TAGGED* size %s",
-                            "analysis_info", "analyzer_command", id_, (end - start), len(analyzer_command), len(new_analyzer_command))
+                LOG.warning("Migrate '%s'.'%s' (ID = %s): took %s, "
+                            "original *COMPRESSED* size %s, "
+                            "new *COMPRESSED+TAGGED* size %s",
+                            "analysis_info", "analyzer_command",
+                            id_,
+                            (end - start),
+                            len(analyzer_command),
+                            len(new_analyzer_command))
 
             ret = {"analyzer_command": new_analyzer_command}
             return ret
@@ -168,8 +174,12 @@ def upgrade():
                 new_version = to_z_str(version)
                 end = now()
                 if (end - start).total_seconds() > 1:
-                    LOG.warning("Migrate '%s'.'%s' (ID = %s): took %s, original *COMPRESSED* size %s, new *COMPRESSED+TAGGED* size %s",
-                                "analyzer_statistics", "version", id_, (end - start), len(version), len(new_version))
+                    LOG.warning("Migrate '%s'.'%s' (ID = %s): took %s, "
+                                "original *COMPRESSED* size %s, "
+                                "new *COMPRESSED+TAGGED* size %s",
+                                "analyzer_statistics", "version",
+                                id_, (end - start),
+                                len(version), len(new_version))
 
                 ret["version"] = new_version
             if failed_files is not None:
@@ -177,8 +187,12 @@ def upgrade():
                 new_failed_files = to_z_str(failed_files)
                 end = now()
                 if (end - start).total_seconds() > 1:
-                    LOG.warning("Migrate '%s'.'%s' (ID = %s): took %s, original *COMPRESSED* size %s, new *COMPRESSED+TAGGED* size %s",
-                                "analyzer_statistics", "failed_files", id_, (end - start), len(failed_files), len(new_failed_files))
+                    LOG.warning("Migrate '%s'.'%s' (ID = %s): took %s, "
+                                "original *COMPRESSED* size %s, "
+                                "new *COMPRESSED+TAGGED* size %s",
+                                "analyzer_statistics", "failed_files",
+                                id_, (end - start),
+                                len(failed_files), len(new_failed_files))
 
                 ret["failed_files"] = new_failed_files
 
@@ -193,8 +207,12 @@ def upgrade():
             new_content = to_z_blob(content)
             end = now()
             if (end - start).total_seconds() > 1:
-                LOG.warning("Migrate '%s'.'%s' (contentHash = %s): took %s, original *COMPRESSED* size %s, new *COMPRESSED+TAGGED* size %s",
-                            "file_contents", "content", content_hash, (end - start), len(content), len(new_content))
+                LOG.warning("Migrate '%s'.'%s' (contentHash = %s): took %s, "
+                            "original *COMPRESSED* size %s, "
+                            "new *COMPRESSED+TAGGED* size %s",
+                            "file_contents", "content",
+                            content_hash, (end - start),
+                            len(content), len(new_content))
 
             ret = {"content": new_content}
 
@@ -207,8 +225,12 @@ def upgrade():
                 )
                 end = now()
                 if (end - start).total_seconds() > 1:
-                    LOG.warning("Migrate '%s'.'%s' (contentHash = %s): took %s, original *COMPRESSED* size %s, new *COMPRESSED+TAGGED* size %s",
-                                "file_contents", "blame_info", content_hash, (end - start), len(blame_info), len(new_blame_info))
+                    LOG.warning("Migrate '%s'.'%s' (contentHash = %s): "
+                                "took %s, original *COMPRESSED* size %s, "
+                                "new *COMPRESSED+TAGGED* size %s",
+                                "file_contents", "blame_info",
+                                content_hash, (end - start)
+                                len(blame_info), len(new_blame_info))
 
                 ret["blame_info"] = new_blame_info
 
@@ -247,7 +269,7 @@ def downgrade():
                 return {}
             return {"analyzer_command": to_raw(analyzer_command)}
 
-        with_ids("analysis_info","id", ["analyzer_command"], transform)
+        with_ids("analysis_info", "id", ["analyzer_command"], transform)
 
     def downgrade_analyzer_statistics():
         def transform(_, version, failed_files):
