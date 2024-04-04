@@ -1,0 +1,23 @@
+# Since version 2.23 (August 2019), "git blame" introduced features to block
+# certain commits from appearing as changes in the blame output.
+#
+# This file contains the list of commits that are not likely what you are
+# looking for in a blame, usually mass reformatting, or renaming. Changes added
+# by commits in list will be attributed to a parent commit that changed the
+# affected (or nearby) lines.
+#
+# This file is named as such, because GitHub's web interface automatically
+# recognises it by this conventional name. See the documentation for details:
+#
+# http://docs.github.com/en/repositories/working-with-files/using-files/viewing-a-file#ignore-commits-in-the-blame-view
+#
+# You can, and should set this file as the default ignore file for "git blame"
+# for your machine as well by running the following command in your
+# working directory:
+#
+#     $ git config blame.ignoreRevsFile .git-blame-ignore-revs
+#
+# Lines starting with # are comments and are ignored.
+# Please make sure to **ALWAYS** attribute and reason why a commit shall be
+# ignored, don't just dump bare SHAs into this file!
+
